@@ -214,7 +214,7 @@ function telaMusica(chave) {
       ${m.pdf ? `<a class="btn" href="${esc(m.pdf)}" target="_blank" rel="noopener">PDF</a>` : ''}
       ${m.partituraLocal ? '<button class="btn" id="ver-partitura">🎼 Partitura</button>' : m.partitura ? `<a class="btn" href="${esc(m.partitura)}" target="_blank" rel="noopener">Partitura ↗</a>` : ''}
       ${m.youtube ? `<button class="btn" id="yt">YouTube</button>` : ''}
-      ${m.audio ? `<button class="btn" id="audio">Ouvir</button>` : ''}
+      ${(m.audios || (m.audio ? [m.audio] : [])).map((u, i, l) => `<button class="btn" data-audio="${esc(u)}">Ouvir${l.length > 1 ? ' ' + (i + 1) : ''}</button><a class="btn" href="${esc(u)}" target="_blank" rel="noopener" title="${m.audioQuebrado ? 'O arquivo está com erro no site da arquidiocese' : 'Abrir o áudio'}">↗${m.audioQuebrado ? ' (erro no site)' : ''}</a>`).join('')}
     </div>
     <div id="midia"></div>
     <div id="partitura-box" class="cartao nao-imprimir" hidden><div class="barra" style="justify-content:space-between;margin:0 0 8px"><b>Partitura</b>
@@ -257,11 +257,11 @@ function telaMusica(chave) {
     location.replace('#/musica/' + b.dataset.versao);
   });
   tela.querySelector('#yt')?.addEventListener('click', () => {
-    tela.querySelector('#midia').innerHTML = `<div class="cartao" style="padding:0;overflow:hidden"><iframe style="width:100%;aspect-ratio:16/9;border:0;display:block" src="https://www.youtube-nocookie.com/embed/${esc(m.youtube)}" allow="encrypted-media; picture-in-picture" allowfullscreen title="Vídeo da música"></iframe></div>`;
+    tela.querySelector('#midia').innerHTML = `<div class="cartao" style="padding:0;overflow:hidden"><iframe style="width:100%;aspect-ratio:16/9;border:0;display:block" src="https://www.youtube-nocookie.com/embed/${esc(m.youtube)}${m.youtubeInicio ? '?start=' + m.youtubeInicio : ''}" allow="encrypted-media; picture-in-picture" allowfullscreen title="Vídeo da música"></iframe></div>`;
   });
-  tela.querySelector('#audio')?.addEventListener('click', () => {
-    tela.querySelector('#midia').innerHTML = `<audio controls autoplay src="${esc(m.audio)}" style="width:100%"></audio>`;
-  });
+  tela.querySelectorAll('[data-audio]').forEach(b => b.addEventListener('click', () => {
+    tela.querySelector('#midia').innerHTML = `<audio controls autoplay src="${esc(b.dataset.audio)}" style="width:100%"></audio>`;
+  }));
   rolagem(tela.querySelector('#rolar'));
 }
 
@@ -376,7 +376,8 @@ export function telaEditar(chave, inicial = {}, opts = {}) {
     nome: f.nome.value.trim(), complemento: f.complemento.value.trim(), chordpro: f.chordpro.value.replace(/\s+$/, ''),
     tempos: [...f.querySelectorAll('[name=tempos]:checked')].map(i => +i.value),
     partes: [...f.querySelectorAll('[name=partes]:checked')].map(i => +i.value),
-    cabecalho: d.cabecalho, youtube: d.youtube,
+    cabecalho: d.cabecalho, youtube: d.youtube, youtubeInicio: d.youtubeInicio,
+    audio: d.audio, audios: d.audios, audioQuebrado: d.audioQuebrado,
     ocr: derivada || !d.ocr ? null : { ...d.ocr, revisar: false, revisada: new Date().toISOString() }, // salvar depois de conferir = revisada
   });
   const lerFoto = tela.querySelector('#ler-foto');

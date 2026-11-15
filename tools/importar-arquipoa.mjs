@@ -140,7 +140,7 @@ async function main() {
   await emParalelo(lista, 4, async m => {
     try {
       if (m.recursos.includes('listeningMusic')) {
-        const src = (await modal('modalMusica', m.id)).match(/src="([^"]+\.mp3)"/i);
+        const src = (await modal('modalMusica', m.id)).match(/src="([^"]+\.(?:mp3|m4a|mp4|wav|aac|ogg|oga|wma|flac))"/i);
         if (src) m.audio = urlArquivo(src[1]);
       }
       if (m.recursos.includes('viewYoutube')) {
@@ -185,6 +185,7 @@ async function main() {
   const escaneadas = anexarEscaneadas(final);
   writeFileSync(SAIDA, JSON.stringify(final));
   console.log(`  ${escaneadas} cifras escaneadas (imagem) anexadas em app/data/pdf/`);
+  console.log('Depois rode: node tools/links-audio.mjs  (links de áudio/vídeo com nomes partidos e acentos)');
   console.log(`Pronto: ${saida.length} músicas, ${comCifra} com cifra, ${saida.filter(m => m.chordpro && !m.temCifra).length} só com letra.`);
   if (falhas.length) console.log(`Falhas (${falhas.length}):\n  ` + falhas.slice(0, 30).join('\n  '));
 }

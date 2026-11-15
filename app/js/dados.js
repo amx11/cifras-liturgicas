@@ -154,6 +154,7 @@ export function salvarMinha(m) {
     cabecalho: m.cabecalho || [], chordpro: m.chordpro || '', temCifra: (m.chordpro || '').includes('['),
     tom: detectarTom(m.chordpro || ''), youtube: m.youtube || null, criada: m.criada || new Date().toISOString(),
     base: m.base || null, personalizada: !!m.personalizada, audio: m.audio || null,
+    audios: m.audios || null, audioQuebrado: !!m.audioQuebrado, youtubeInicio: m.youtubeInicio || null,
     ocr: m.ocr || null,
   };
   const i = estado.minhas.findIndex(x => x.chave === chave);
