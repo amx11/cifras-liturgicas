@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cifras Litúrgicas</title>
+  <meta name="description" content="Cifras de música litúrgica: busca por tempo litúrgico, transposição, montagem de missas e reconhecimento de acordes.">
+  <meta name="theme-color" content="#2f5d50">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icone-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topo">
+    <a href="#/musicas" class="marca"><img src="icone.svg" alt=""> Cifras Litúrgicas</a>
+    <span id="status-rede" class="status-rede" hidden>offline</span>
+  </header>
+  <div class="layout">
+    <aside id="painel-missa" class="painel-missa" aria-label="Missa em montagem"></aside>
+    <main id="tela" tabindex="-1"></main>
+  </div>
+  <div id="painel-fundo" class="painel-fundo"></div>
+  <button id="fab-missa" class="fab-missa" type="button" aria-label="Abrir a missa em montagem">✚ Missa</button>
+  <nav class="abas" aria-label="Navegação principal">
+    <a href="#/musicas" data-aba="musicas"><span class="ico">♪</span>Músicas</a>
+    <a href="#/missas" data-aba="missas"><span class="ico">✚</span>Missas</a>
+    <a href="#/importar" data-aba="importar"><span class="ico">⇪</span>Importar</a>
+    <a href="#/ouvir" data-aba="ouvir"><span class="ico">🎙</span>Ouvir</a>
+    <a href="#/ajustes" data-aba="ajustes"><span class="ico">⚙</span>Ajustes</a>
+  </nav>
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
