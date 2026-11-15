@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { detectarTom, normalizar } from '../app/js/cifra.js';
 import { partituraParaCifra, definirVocabulario } from '../app/js/partitura.js';
+import { partituraImagemParaCifra, encerrar as encerrarOcr } from './partitura-imagem-node.mjs';
 
 const RAIZ = new URL('../', import.meta.url).pathname;
 const pdfjs = await import(RAIZ + 'node_modules/pdfjs-dist/legacy/build/pdf.mjs');
@@ -36,6 +37,13 @@ async function temPauta(arq) {
 }
 
 const contar = cp => (cp.match(/\[/g) || []).length;
+async function semTexto(arq) {
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(arq)), verbosity: 0 }).promise;
+  let n = 0;
+  for (let p = 1; p <= doc.numPages; p++) n += (await (await doc.getPage(p)).getTextContent()).items.filter(i => i.str.trim()).length;
+  await doc.destroy();
+  return n < 10;
+}
 const porPartitura = new Map();
 for (const m of dados.musicas) if (m.partitura && m.id < 100000) porPartitura.set(m.partitura, [...(porPartitura.get(m.partitura) || []), m.id]);
 // qualidade da letra: quantas palavras e quantas são conhecidas (do vocabulário das cifras do acervo)
@@ -52,7 +60,13 @@ for (const m of dados.musicas) {
   // 1) sem cifra: gera da partitura
   if (!m.chordpro || (m.daPartitura && !m.daPartitura.doPdfDeCifra)) {
     if (!existsSync(par)) continue;
-    const r = await partituraParaCifra(pdfjs, new Uint8Array(readFileSync(par)));
+    let r = await partituraParaCifra(pdfjs, new Uint8Array(readFileSync(par)));
+    // partitura em imagem (escaneada / sem texto): leitura pela imagem
+    let porImagem = false;
+    if (contar(r.chordpro) < 3 && await semTexto(par)) {
+      r = await partituraImagemParaCifra(m.id, par); porImagem = true; r.duvidas = [];
+      if (r.confianca < 70) { if (VERBOSO) console.log('imagem ilegível demais', m.id, m.nome, r.confianca); r.chordpro = ''; }   // fica só a partitura
+    }
     const q = qualidade(r.chordpro);
     // a partitura é mesmo desta música? (o site às vezes aponta a partitura de outra) — o título aparece na letra
     const norm = t => normalizar(t).replace(/[^a-z ]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !/^(salmo|hino|canto|versao|refrao|antifona)$/.test(w));
@@ -69,7 +83,8 @@ for (const m of dados.musicas) {
     }
     m.chordpro = r.chordpro; m.tom = detectarTom(r.chordpro); m.temCifra = true;
     if (r.cabecalho?.length) m.cabecalho = r.cabecalho;
-    m.daPartitura = { formato: r.formato, duvidas: r.duvidas.slice(0, 15), revisar: r.duvidas.length > 0 || q.conhecidas < 0.5 };
+    m.daPartitura = { formato: r.formato, duvidas: r.duvidas.slice(0, 15), revisar: r.duvidas.length > 0 || q.conhecidas < 0.5 || porImagem };
+    if (porImagem) m.daPartitura.duvidas.unshift('cifra lida da imagem da partitura (escaneada): confira letra e acordes');
     if (q.conhecidas < 0.5) m.daPartitura.duvidas.unshift('letra com muitas palavras não reconhecidas: confira com a partitura');
     m.originalPdf = m.partituraLocal;
     if (m.ocr?.falhou) delete m.ocr;             // escaneada ilegível: agora tem cifra pela partitura
@@ -98,5 +113,6 @@ if (ANTES) {
   const tomAntes = new Map(ANTES.musicas.map(m => [m.id, m.tom]));
   for (const m of dados.musicas) { delete m.tomAntes; const t = tomAntes.get(m.id); if (t && m.tom && t !== m.tom) m.tomAntes = t; }
 }
+await encerrarOcr();
 if (SALVAR) writeFileSync(ARQ, JSON.stringify(dados));
 console.log(`${outraMusica} partituras que não batem com o título (não usadas) · ${novas} cifras novas geradas de partitura · ${refeitas} cifras refeitas (PDF misturado com partitura) · ${semAcordes} partituras sem acordes · ${copiadas} partituras copiadas para o app`);

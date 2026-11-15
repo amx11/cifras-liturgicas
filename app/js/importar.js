@@ -23,8 +23,17 @@ async function cifraDePartitura(lib, dados) {
 
 // Lê foto(s) ou PDF escaneado e abre o editor com o original ao lado para conferir.
 // `base`: campos já digitados no editor (título etc.), que são mantidos.
+async function prepararVocabulario() {
+  const { definirVocabulario } = await import('./partitura.js');
+  const vocab = new Set();
+  for (const m of estado.base || []) if (m.chordpro && !m.ocr && !m.daPartitura)
+    for (const w of m.chordpro.replace(/\[[^\]]*\]/g, '').split(/[\s\-–,.;:!?()"'“”]+/)) { const n = w.toLowerCase().normalize('NFC').replace(/[^a-zà-ÿ]/g, ''); if (n.length >= 2) vocab.add(n); }
+  definirVocabulario([...vocab]);
+}
+
 export async function lerEInserir(arquivos, out, base = {}) {
   const { lerCifra, ehImagem } = await import('./ocr.js');
+  await prepararVocabulario();
   const mostrar = t => { out.textContent = t; };
   try {
     const r = await lerCifra(arquivos, mostrar);
@@ -36,7 +45,7 @@ export async function lerEInserir(arquivos, out, base = {}) {
       ...base, nome: base.nome || r.titulo || semExt(arquivos[0].name), cabecalho: r.cabecalho,
       complemento: base.complemento || r.cabecalho.join(' · ').slice(0, 120), chordpro: r.chordpro,
       ocr: { duvidas: r.duvidasResumo, legibilidade: Math.round(r.legibilidade * 100) },
-    }, { original: r.imagens, locais: r.locais, duvidas, origemLida: foto ? (arquivos.length > 1 ? 'foto (várias páginas)' : 'foto') : 'PDF escaneado', voltar: '#/importar' });
+    }, { original: r.imagens, locais: r.locais, duvidas, origemLida: r.partitura ? 'partitura (imagem)' : foto ? (arquivos.length > 1 ? 'foto (várias páginas)' : 'foto') : 'PDF escaneado', voltar: '#/importar' });
     aviso('Leitura pronta: confira com o original e salve', 3500);
   } catch (err) {
     mostrar('Não foi possível ler: ' + err.message);

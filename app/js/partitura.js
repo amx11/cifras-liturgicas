@@ -223,9 +223,10 @@ function cifraDaPauta(linhasTexto, pautas, hifens) {
 // Vocabulário (palavras das cifras em texto do acervo) para juntar sílabas encostadas sem hífen
 let VOCAB = null;
 export function definirVocabulario(palavras) { VOCAB = new Set(palavras); }
+export const vocabulario = () => VOCAB;
 const norm = w => w.toLowerCase().normalize('NFC').replace(/[^a-zà-ÿ]/g, '');   // mantém acentos ("à"+"mar" não é "amar")
 
-function montarEstrofe(seq) {
+export function montarEstrofe(seq) {
   const linhas = [];
   let pendente = null;                          // palavra que continua na pauta seguinte ("Ma-" ... "ria")
   let rotulo = null;                            // número da estrofe em curso
