@@ -152,6 +152,23 @@ label.campo > span { display: block; font-size: 13px; color: var(--suave); margi
 
 /* Ouvir */
 .acorde-grande { font-size: 72px; font-weight: 800; text-align: center; color: var(--acorde); line-height: 1.1; min-height: 1.1em; }
+.afinador .cordas { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.af-nota { text-align: center; font-size: 96px; font-weight: 800; line-height: 1; margin-top: 8px; color: var(--texto); }
+.af-nota small { font-size: 32px; font-weight: 600; color: var(--suave); }
+.af-sub { text-align: center; color: var(--suave); min-height: 1.4em; margin-bottom: 10px; }
+.af-escala { position: relative; height: 34px; margin: 10px 14px 22px; }
+.af-escala.fina { height: 22px; }
+.af-escala .af-faixa { position: absolute; inset: 40% 0; background: var(--linha); border-radius: 99px; }
+.af-escala .af-centro { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--suave); transform: translateX(-1px); }
+.af-escala .af-ponteiro { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 4px; border-radius: 2px; background: var(--acorde); transform: translateX(-2px); transition: left .08s linear; }
+.af-escala span { position: absolute; top: 100%; transform: translateX(-50%); font-size: 11px; color: var(--suave); }
+.af-cents { text-align: center; font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.af-info { text-align: center; color: var(--suave); font-variant-numeric: tabular-nums; margin: 4px 0 10px; }
+.afinador[data-estado="perfeito"] .af-nota, .afinador[data-estado="perfeito"] .af-cents { color: #1f9d55; }
+.afinador[data-estado="ok"] .af-nota, .afinador[data-estado="ok"] .af-cents { color: #4caf50; }
+.afinador[data-estado="perto"] .af-cents { color: #c99a2e; }
+.afinador[data-estado="longe"] .af-cents { color: var(--perigo); }
+.afinador[data-estado="perfeito"] .af-ponteiro, .afinador[data-estado="ok"] .af-ponteiro { background: #1f9d55; }
 .medidor { height: 8px; background: var(--linha); border-radius: 99px; overflow: hidden; }
 .medidor > div { height: 100%; background: var(--primaria); width: 0; transition: width .1s; }
 .historico { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 700; color: var(--acorde); }
