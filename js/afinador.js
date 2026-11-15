@@ -71,11 +71,18 @@ export function telaAfinador(tela) {
     } catch (e) { aviso('Não foi possível usar o microfone: ' + e.message); }
   };
 
-  function mostrar(f) {
+  function mostrar(f, incerteza = 0.3) {
     let alvo, nome, oitava, cents, corda = null;
     if (cfg.modo === 'cromatico') { const n = notaDe(f, cfg.la); ({ alvo, nome, oitava, cents } = n); }
     else if (cfg.modo === 'auto') { const c = cordaDe(f, cfg.la); corda = c; ({ alvo, nome, oitava, cents } = c); }
     else { const c = CORDAS_VIOLAO[cfg.modo]; corda = c; nome = c.nome; oitava = c.oitava; alvo = freqDoMidi(midiDe(c.nome, c.oitava), cfg.la); cents = centsEntre(f, alvo); }
+    // zona morta honesta: se o desvio está dentro da incerteza da própria medição (relógio do aparelho,
+    // ruído, oscilação da corda), não há como distinguir de zero → mostra 0,0. Com histerese para não piscar.
+    const tol = Math.min(0.3, Math.max(0.1, incerteza));
+    if (sessao) {
+      if (sessao.travado ? Math.abs(cents) < tol * 1.5 : Math.abs(cents) < tol) { sessao.travado = true; cents = 0; }
+      else sessao.travado = false;
+    }
     $('#nota').textContent = nome; $('#oitava').textContent = oitava;
     $('#sub').textContent = `${nomePt(nome)}${corda ? ` · ${corda.corda}ª corda` : ''}${Math.abs(cents) > 50 ? (cents > 0 ? ' · muito alta: afrouxe' : ' · muito baixa: aperte') : cents > 1 ? ' · alta: afrouxe um pouco' : cents < -1 ? ' · baixa: aperte um pouco' : ' · afinada'}`;
     const c = Math.max(-50, Math.min(50, cents)), cf = Math.max(-5, Math.min(5, cents));
@@ -108,13 +115,17 @@ export function telaAfinador(tela) {
       return;
     }
     // janela longa (0,34 s) para medir o fundamental com precisão; se a nota acabou de mudar, usa só o trecho recente
-    const nova = sessao.f && Math.abs(centsEntre(r.freq, sessao.f)) > 40;
-    if (nova) est.limpar();
+    // nota nova = mudou mais de 40 cents ou voltou depois de silêncio (nova palhetada)
+    const nova = !sessao.f || agora - sessao.visto > 300 || Math.abs(centsEntre(r.freq, sessao.f)) > 40;
+    if (nova) { est.limpar(); sessao.ataque = agora; sessao.travado = false; }
     const f = refinarFundamental(nova ? buf.subarray(buf.length - 8192) : buf, taxa, r.freq);
     sessao.f = f; sessao.visto = agora;
-    est.adicionar(f);
+    // logo após a palhetada a corda soa alguns cents mais alta: os primeiros 0,35 s não entram na média
+    const emAtaque = agora - sessao.ataque < 350;
+    if (!emAtaque) est.adicionar(f);
     const v = est.valor();
-    mostrar(v ? v.freq : f);
+    mostrar(v ? v.freq : f, v ? v.desvioCents : 5);
+    if (emAtaque || !v) { $('#estab').textContent = 'medindo…'; return; }
     $('#estab').textContent = v && v.amostras >= 5 && v.desvioCents < 0.3 ? `estável (±${v.desvioCents.toFixed(2)} c)` : 'medindo…';
   }
 }
