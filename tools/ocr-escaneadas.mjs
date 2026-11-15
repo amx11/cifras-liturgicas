@@ -67,7 +67,7 @@ async function ocrDocumento(id, geral, acordes) {
 // ---------- Principal ----------
 async function main() {
   const dados = JSON.parse(readFileSync(ARQ, 'utf8'));
-  let alvo = dados.musicas.filter(m => m.pdfImagem && !m.daPartitura && (!idsPedidos.length || idsPedidos.includes(m.id)));
+  let alvo = dados.musicas.filter(m => m.id < 100000 && m.pdfImagem && !m.daPartitura && (!idsPedidos.length || idsPedidos.includes(m.id)));
   if (LOTE.length === 2) {
     alvo = alvo.filter((m, k) => k % LOTE[1] === LOTE[0] && (REFAZER || !existsSync(`${CACHE}${m.id}.json`)));
     console.log(`lote ${LOTE.join('/')}: ${alvo.length} para ler`);
