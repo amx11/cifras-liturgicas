@@ -212,7 +212,7 @@ function cifraDaPauta(linhasTexto, pautas, hifens) {
     // acordes: linha(s) de acordes logo acima da pauta; letra: tudo entre esta pauta e a próxima que não seja acorde
     const acima = linhasTexto.filter(l => l.y < f.ini - 1 && l.y > f.ini - 32 && ehDeAcordes(l) && !(ip > 0 && l.y < pautas[ip - 1].fim + 4));
     const acordes = acima.flatMap(l => acordesDaLinha(l.itens));
-    const limite = prox ? prox.ini - 2 : f.fim + 90;
+    const limite = prox ? prox.ini - 2 : f.fim + 400;   // abaixo da última pauta: até onde as estrofes seguem encadeadas
     let abaixo = linhasTexto.filter(l => l.y > f.fim + 3 && l.y < limite && !ehDeAcordes(l) && !linhaDaPauta(l) && !soNumeros(l))
       .sort((a, b) => a.y - b.y);
     {                                             // só as estrofes coladas na pauta (mais longe é outro bloco de texto)
