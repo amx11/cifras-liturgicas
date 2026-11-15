@@ -4,7 +4,7 @@
 //    para as notas não atrapalharem); 3) agrupa as sílabas por estrofe pela altura; 4) cada acorde vai
 // para a sílaba mais próxima (no mesmo princípio da partitura em texto: acorde e sílaba na mesma nota).
 // O OCR é injetado (Tesseract no navegador ou no Node): ler(canvas, 'acordes'|'letra') -> palavras.
-import { ehAcorde } from './cifra.js';
+import { ehAcorde, solfejoParaAcorde } from './cifra.js';
 import { corrigirAcorde, aproximarAcorde } from './ocr-cifra.js';
 import { montarEstrofe, vocabulario } from './partitura.js';
 import { separarCabecalho } from './pdf.js';
@@ -158,6 +158,7 @@ export async function lerPartituraImagem(paginas, ler, criarCanvas) {
           // o "♯" desenhado na partitura é lido como "li", "l", "I", "1", "f", "t", "H" logo depois da nota ("Clim" = C#m)
           const t = w.texto.replace(/♯/g, '#').replace(/♭/g, 'b').replace(/^([A-G])(?:li|il|ll|l|I|1|f|t|H|¥|£)(?=m|7|9|6|4|$|\/|sus|dim|º|°|\()/, '$1#');
           let c = corrigirAcorde(t);
+          if (!ehAcorde(c)) c = solfejoParaAcorde(w.texto) || c;              // "Sol", "Ré7", "dó#m" 
           // sustenido/bemol desenhado como símbolo musical vira outra coisa no OCR ("F4m", "Fim", "C¥m"): acorde válido mais próximo
           if (!ehAcorde(c) && /^[A-G]/.test(t) && t.length <= 7) c = aproximarAcorde(t.replace(/[^A-Za-z0-9#/()º°+-]/g, '#'))?.acorde || c;
           if (w.conf >= 15 && ehAcorde(c) && w.x0 > prox.x0 + 3.5 * prox.d) acordesDe[i].push({ str: c, x: (w.xs?.[0] ?? w.x0) * k, w: (w.x1 - w.x0) * k });

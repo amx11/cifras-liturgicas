@@ -14,6 +14,18 @@ const RE_ACORDE = new RegExp(`^([A-G][#b]?)(${QUALIDADE}${EXTENSAO})(?:/([A-G][#
 // Tokens que podem aparecer numa linha de acordes sem serem acordes
 const RE_EXTRA = /^(?:\?|\/:|:\/|\|:|:\||\||\|\||%|-+|\/|\.+|\(?\d+x\)?|\(?x\d+\)?|\(|\)|:|intro:?|introdução:?|solo:?|final:?|bis)$/i;
 
+// Acorde escrito com o nome da nota em português ("Lá", "dó# m", "fá#m", "si m", "Ré 7", "Mi b") -> cifra (A, C#m, F#m, Bm, D7, Eb)
+const SOLFEJO = { do: 'C', re: 'D', mi: 'E', fa: 'F', sol: 'G', la: 'A', si: 'B' };
+export function solfejoParaAcorde(t) {
+  const m = /^\(?\s*(d[óo]|r[ée]|mi|f[áa]|sol|l[áa]|si)\s*([#♯b♭])?\s*(m(?!aj)|M|-)?\s*((?:maj|dim|aug|sus|add|º|°|ø|\+|\d|\(|\)|\/|[#b])*)\s*(?:\/\s*(d[óo]|r[ée]|mi|f[áa]|sol|l[áa]|si)\s*([#♯b♭])?)?\s*\)?$/i.exec(t.trim());
+  if (!m) return null;
+  const nota = (n, a) => SOLFEJO[n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] + (a ? (/[#♯]/.test(a) ? '#' : 'b') : '');
+  // minúscula ("dó# m", "si m") = menor em muitos hinários; "m" explícito também
+  const menor = m[3] === 'm' || m[3] === '-' || (m[1][0] === m[1][0].toLowerCase() && /m/.test(m[3] || '') );
+  const acorde = nota(m[1], m[2]) + (menor ? 'm' : '') + (m[4] || '').replace(/\s+/g, '') + (m[5] ? '/' + nota(m[5], m[6]) : '');
+  return acorde;
+}
+
 export function ehAcorde(tok) {
   const t = tok.replace(/[,.]$/, '');
   if (RE_ACORDE.test(t)) return true;                                   // D7(4), Bm7(b5), C(9)
