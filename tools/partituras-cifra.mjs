@@ -36,7 +36,14 @@ async function temPauta(arq) {
 }
 
 const contar = cp => (cp.match(/\[/g) || []).length;
-let novas = 0, refeitas = 0, semAcordes = 0, copiadas = 0;
+const porPartitura = new Map();
+for (const m of dados.musicas) if (m.partitura && m.id < 100000) porPartitura.set(m.partitura, [...(porPartitura.get(m.partitura) || []), m.id]);
+// qualidade da letra: quantas palavras e quantas são conhecidas (do vocabulário das cifras do acervo)
+function qualidade(cp) {
+  const ws = cp.replace(/\[[^\]]*\]/g, ' ').split(/[\s\-–,.;:!?()"'“”_]+/).map(w => w.toLowerCase().normalize('NFC').replace(/[^a-zà-ÿ]/g, '')).filter(w => w.length >= 2);
+  return { palavras: ws.length, conhecidas: ws.length ? ws.filter(w => vocab.has(w)).length / ws.length : 0 };
+}
+let novas = 0, refeitas = 0, semAcordes = 0, copiadas = 0, outraMusica = 0;
 for (const m of dados.musicas) {
   if (m.id >= 100000) continue;
   const par = `${RAIZ}tools/cache/pdf/${m.id}-par.pdf`;
@@ -46,14 +53,24 @@ for (const m of dados.musicas) {
   if (!m.chordpro || (m.daPartitura && !m.daPartitura.doPdfDeCifra)) {
     if (!existsSync(par)) continue;
     const r = await partituraParaCifra(pdfjs, new Uint8Array(readFileSync(par)));
-    if (contar(r.chordpro) < 3) {                // partitura sem acordes escritos: continua sem cifra
+    const q = qualidade(r.chordpro);
+    // a partitura é mesmo desta música? (o site às vezes aponta a partitura de outra) — o título aparece na letra
+    const norm = t => normalizar(t).replace(/[^a-z ]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !/^(salmo|hino|canto|versao|refrao|antifona)$/.test(w));
+    const tit = norm(m.nome.replace(/\(.*$/, '').replace(/[-_]/g, ' ')).slice(0, 4), letra = new Set(norm(r.chordpro.replace(/\[[^\]]*\]/g, '')));
+    // só quando outra música do acervo aponta para o mesmo arquivo (erro de cadastro); títulos genéricos
+    // ("Aclamação Memorial", "Doxologia") não aparecem na letra e não são erro
+    const compartilhada = (porPartitura.get(m.partitura) || []).length > 1;
+    const bateTitulo = !compartilhada || !tit.length || tit.some(w => letra.has(w)) || q.palavras < 12;
+    if (!bateTitulo) { outraMusica++; if (VERBOSO) console.log('partitura de outra música?', m.id, m.nome); if (m.daPartitura) { m.chordpro = ''; m.temCifra = false; m.tom = ''; delete m.daPartitura; } continue; }
+    if (contar(r.chordpro) < 3 || q.palavras < 12) {   // sem acordes escritos, ou a letra não saiu como texto: fica só a partitura
       semAcordes++;
       if (m.daPartitura) { m.chordpro = ''; m.temCifra = false; m.tom = ''; delete m.daPartitura; }
       continue;
     }
     m.chordpro = r.chordpro; m.tom = detectarTom(r.chordpro); m.temCifra = true;
     if (r.cabecalho?.length) m.cabecalho = r.cabecalho;
-    m.daPartitura = { formato: r.formato, duvidas: r.duvidas.slice(0, 15), revisar: r.duvidas.length > 0 };
+    m.daPartitura = { formato: r.formato, duvidas: r.duvidas.slice(0, 15), revisar: r.duvidas.length > 0 || q.conhecidas < 0.5 };
+    if (q.conhecidas < 0.5) m.daPartitura.duvidas.unshift('letra com muitas palavras não reconhecidas: confira com a partitura');
     m.originalPdf = m.partituraLocal;
     if (m.ocr?.falhou) delete m.ocr;             // escaneada ilegível: agora tem cifra pela partitura
     novas++;
@@ -82,4 +99,4 @@ if (ANTES) {
   for (const m of dados.musicas) { delete m.tomAntes; const t = tomAntes.get(m.id); if (t && m.tom && t !== m.tom) m.tomAntes = t; }
 }
 if (SALVAR) writeFileSync(ARQ, JSON.stringify(dados));
-console.log(`${novas} cifras novas geradas de partitura · ${refeitas} cifras refeitas (PDF misturado com partitura) · ${semAcordes} partituras sem acordes · ${copiadas} partituras copiadas para o app`);
+console.log(`${outraMusica} partituras que não batem com o título (não usadas) · ${novas} cifras novas geradas de partitura · ${refeitas} cifras refeitas (PDF misturado com partitura) · ${semAcordes} partituras sem acordes · ${copiadas} partituras copiadas para o app`);
