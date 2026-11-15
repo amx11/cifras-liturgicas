@@ -112,6 +112,9 @@ export function parseChordPro(texto) {
 
 // Primeiro acorde da música como tom provável (convenção comum em cifras litúrgicas)
 export function detectarTom(chordpro) {
+  // tom escrito no início ("(E)" antes da letra) vale mais que o primeiro acorde
+  const indicado = chordpro.match(/^\s*\[\(([A-G][#b]?m?)\)\]/);
+  if (indicado) return indicado[1];
   const m = chordpro.match(/\[([A-G][#b]?)(m(?!aj))?[^\]]*\]/);
   if (!m) return '';
   return m[1] + (m[2] ? 'm' : '');
@@ -265,12 +268,22 @@ export function silabas(palavra) {
   return sil;
 }
 
+// sílabas de uma palavra que pode ter apóstrofo ("minh'alma" = mi-nhal-ma): o apóstrofo fica com a letra seguinte
+export function silabasPalavra(w) {
+  const limpa = w.replace(/['’]/g, '');
+  const sl = silabas(limpa);
+  const out = [];
+  let k = 0;
+  for (let i = 0; i < w.length; i++) { if (/['’]/.test(w[i])) out.push(sl[k] ?? sl[sl.length - 1] ?? 0); else out.push(sl[k++]); }
+  return out;
+}
+
 function infoSilabas(texto) {
   // para cada índice do texto: [id da palavra, sílaba] (null fora de palavras)
   const info = new Array(texto.length).fill(null);
-  const re = /[a-zA-ZáéíóúâêôãõàüçñÁÉÍÓÚÂÊÔÃÕÀÜÇÑ]+/g;
+  const re = /[a-zA-ZáéíóúâêôãõàüçñÁÉÍÓÚÂÊÔÃÕÀÜÇÑ]+(?:['’][a-zA-ZáéíóúâêôãõàüçñÁÉÍÓÚÂÊÔÃÕÀÜÇÑ]+)*/g;
   let m, w = 0;
-  while ((m = re.exec(texto))) { const sl = silabas(m[0]); for (let k = 0; k < m[0].length; k++) info[m.index + k] = [w, sl[k]]; w++; }
+  while ((m = re.exec(texto))) { const sl = silabasPalavra(m[0]); for (let k = 0; k < m[0].length; k++) info[m.index + k] = [w, sl[k]]; w++; }
   return info;
 }
 
@@ -413,7 +426,7 @@ function linhaComPosicoes(itens) {
     if (!it.str) continue;
     const cw = it.str.length ? it.w / it.str.length : 0;
     // itens do OCR já são palavras separadas: sempre há espaço entre eles (acordes encostados "F" "E" não viram "FE")
-    if (fimAnterior !== null && (it.x - fimAnterior > cw * 0.6 || (it.cs && comCentros)) && !texto.endsWith(' ') && !it.str.startsWith(' ')) {
+    if (fimAnterior !== null && (it.x - fimAnterior > cw * 0.6 || (it.ocr && comCentros)) && !texto.endsWith(' ') && !it.str.startsWith(' ')) {
       texto += ' ';
       xs.push(fimAnterior); cs.push(null);
     }

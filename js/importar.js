@@ -8,6 +8,19 @@ import { analisarAudio, montarChordPro } from './acordes-audio.js';
 
 const semExt = n => n.replace(/\.[^.]+$/, '');
 
+// PDF de partitura (pentagrama do MuseScore/Finale): monta a cifra pela posição exata das notas.
+// Devolve null se o PDF não tiver pauta (aí vale o conversor de cifra em texto).
+async function cifraDePartitura(lib, dados) {
+  const { partituraParaCifra, definirVocabulario } = await import('./partitura.js');
+  // vocabulário do acervo para juntar sílabas encostadas sem hífen
+  const vocab = new Set();
+  for (const m of estado.base || []) if (m.chordpro && !m.ocr && !m.daPartitura)
+    for (const w of m.chordpro.replace(/\[[^\]]*\]/g, '').split(/[\s\-–,.;:!?()"'“”]+/)) { const n = w.toLowerCase().normalize('NFC').replace(/[^a-zà-ÿ]/g, ''); if (n.length >= 2) vocab.add(n); }
+  definirVocabulario([...vocab]);
+  const r = await partituraParaCifra(lib, dados);
+  return r.temPauta && (r.chordpro.match(/\[/g) || []).length >= 3 ? r : null;
+}
+
 // Lê foto(s) ou PDF escaneado e abre o editor com o original ao lado para conferir.
 // `base`: campos já digitados no editor (título etc.), que são mantidos.
 export async function lerEInserir(arquivos, out, base = {}) {
@@ -52,8 +65,8 @@ export function telaImportar(tela) {
       <div id="res-foto" class="pequeno" style="white-space:pre-wrap"></div>
     </div>
     <div class="cartao">
-      <h2 style="margin-top:0">PDF de cifra ou letra</h2>
-      <p class="pequeno suave">PDFs de texto (como os da arquidiocese) são convertidos na hora. PDF escaneado (imagem) é lido automaticamente pelo reconhecimento de texto. Os acordes ficam no formato padrão, prontos para transpor.</p>
+      <h2 style="margin-top:0">PDF de cifra, letra ou partitura</h2>
+      <p class="pequeno suave">PDFs de texto (como os da arquidiocese) são convertidos na hora. <b>Partitura</b> (pentagrama com acordes) vira cifra com cada acorde na sílaba da sua nota. PDF escaneado (imagem) é lido automaticamente pelo reconhecimento de texto. Os acordes ficam no formato padrão, prontos para transpor.</p>
       <label class="btn primario">Escolher PDF<input type="file" id="pdf" accept="application/pdf,.pdf" multiple hidden></label>
       <div id="res-pdf" class="pequeno"></div>
     </div>
@@ -95,7 +108,14 @@ export function telaImportar(tela) {
     try {
       const lib = await carregarPdfjs();
       if (arquivos.length === 1) {
-        const r = await pdfParaCifra(lib, new Uint8Array(await arquivos[0].arrayBuffer()));
+        const bytes = new Uint8Array(await arquivos[0].arrayBuffer());
+        const rp = await cifraDePartitura(lib, bytes.slice());
+        if (rp) {
+          telaEditar(null, { nome: rp.titulo || semExt(arquivos[0].name), cabecalho: rp.cabecalho, complemento: rp.cabecalho.join(' · ').slice(0, 120), chordpro: rp.chordpro });
+          aviso('Cifra montada a partir da partitura: confira e salve', 3500);
+          return;
+        }
+        const r = await pdfParaCifra(lib, bytes);
         if (!r.chordpro.trim()) { await lerEInserir(arquivos, out); return; } // escaneado: lê pela imagem
         telaEditar(null, { nome: r.titulo || arquivos[0].name.replace(/\.pdf$/i, ''), cabecalho: r.cabecalho, complemento: r.cabecalho.join(' · ').slice(0, 120), chordpro: r.chordpro });
         return;
@@ -107,7 +127,8 @@ export function telaImportar(tela) {
       for (const [i, arq] of arquivos.entries()) {
         const rot = `(${i + 1}/${arquivos.length}) ${arq.name}: `;
         out.textContent = rot + 'lendo...';
-        let r = await pdfParaCifra(lib, new Uint8Array(await arq.arrayBuffer()));
+        const bytes = new Uint8Array(await arq.arrayBuffer());
+        let r = (await cifraDePartitura(lib, bytes.slice())) || await pdfParaCifra(lib, bytes);
         let ocr = null;
         if (!r.chordpro.trim()) { // escaneado: lê pela imagem e marca para conferir se houver dúvida
           const { lerCifra } = await import('./ocr.js');

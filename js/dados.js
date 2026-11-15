@@ -1,5 +1,5 @@
 // Acervo (arquidiocese + músicas próprias) e dados salvos no aparelho
-import { normalizar, detectarTom } from './cifra.js';
+import { normalizar, detectarTom, transporTom, semitonsEntre } from './cifra.js';
 
 const CHAVES = { prefs: 'cl.prefs', minhas: 'cl.minhas', edicoes: 'cl.edicoes', tons: 'cl.tons', missas: 'cl.missas' };
 
@@ -49,10 +49,27 @@ export async function carregarAcervo() {
     const c = correcoes[m.id];
     const base = { ...m, chave: 'a' + m.id, origem: 'arquipoa' };
     if (c) Object.assign(base, { chordpro: c.chordpro, cabecalho: c.cabecalho ?? m.cabecalho, temCifra: c.chordpro.includes('['), tom: detectarTom(c.chordpro),
-      ocr: m.ocr ? { ...m.ocr, revisar: false, revisada: c.data } : m.ocr, corrigida: c.data });
+      ocr: m.ocr ? { ...m.ocr, revisar: false, revisada: c.data } : m.ocr,
+        daPartitura: m.daPartitura ? { ...m.daPartitura, revisar: false, revisada: c.data } : m.daPartitura, corrigida: c.data });
     return base;
   });
+  migrarTons();
   montarIndice();
+}
+
+// Quando o tom de referência de uma música muda no acervo (m.tomAntes -> m.tom), as escolhas salvas
+// (tom da música e tom de cada canto nas missas) são convertidas para continuar soando igual.
+function migrarTons() {
+  const feitos = estado.prefs.tonsMigrados || {};
+  let mudou = false;
+  for (const m of estado.base) {
+    if (!m.tomAntes || feitos[m.id] === m.tom) continue;
+    const conv = t => (t ? transporTom(m.tom, semitonsEntre(m.tomAntes, t)) : t);
+    if (estado.tons[m.chave]) { estado.tons[m.chave] = conv(estado.tons[m.chave]); if (estado.tons[m.chave] === m.tom) delete estado.tons[m.chave]; }
+    for (const x of estado.missas) for (const it of x.itens || []) if (it.chave === m.chave && it.tom) it.tom = conv(it.tom);
+    feitos[m.id] = m.tom; mudou = true;
+  }
+  if (mudou) { estado.prefs.tonsMigrados = feitos; salvarPrefs(); salvarTons(); salvarMissas(); }
 }
 
 // Grava a correção de uma música do acervo: no projeto (servidor local) e, se não houver servidor, só neste aparelho
@@ -65,7 +82,9 @@ export async function salvarCorrecao(chave, campos) {
       body: JSON.stringify({ id, chordpro: campos.chordpro, cabecalho: campos.cabecalho }) });
     if (r.ok) { delete estado.edicoes[chave]; gravar(CHAVES.edicoes, estado.edicoes); await carregarAcervo(); return { ok: true, onde: 'projeto' }; }
   } catch { /* sem servidor: grava local */ }
-  const ok = editarMusica(chave, { chordpro: campos.chordpro, ocr: m.ocr ? { ...m.ocr, revisar: false, revisada: new Date().toISOString() } : m.ocr });
+  const agora = new Date().toISOString();
+  const ok = editarMusica(chave, { chordpro: campos.chordpro, ocr: m.ocr ? { ...m.ocr, revisar: false, revisada: agora } : m.ocr,
+    daPartitura: m.daPartitura ? { ...m.daPartitura, revisar: false, revisada: agora } : m.daPartitura });
   return { ok, onde: 'aparelho' };
 }
 
