@@ -3,7 +3,7 @@
 // Dois formatos comuns no acervo:
 //  - "bloco": abaixo do pentagrama há a cifra pronta (linhas de acordes sobre a letra);
 //  - "pauta": só o pentagrama, com acordes acima das notas e a letra em sílabas embaixo.
-import { ehAcorde, ehLinhaDeAcordes, itensParaChordPro } from './cifra.js';
+import { ehAcorde, ehLinhaDeAcordes, itensParaChordPro, solfejoParaAcorde } from './cifra.js';
 import { separarCabecalho } from './pdf.js';
 import { conferirComPartitura } from './conferir.js';
 
@@ -172,10 +172,13 @@ function acordesDaLinha(itens, todos = false) {
   const out = [];
   for (const it of ord) {
     const u = out[out.length - 1];
-    if (u && it.x - (u.x + u.w) < 1.2) { u.str += it.str.trim(); u.w = it.x + it.w - u.x; }
+    // pedaços encostados ("F" "♯" "m"), ou complemento depois do nome em português ("dó#" "m", "Ré" "7")
+    const complemento = u && /^(m|M|7|m7|maj7|dim|sus\d?|[#b♯♭]|\d+)$/.test(it.str.trim()) && /(d[óo]|r[ée]|mi|f[áa]|sol|l[áa]|si)[#♯b♭]?$/i.test(u.str) && it.x - (u.x + u.w) < 8;
+    if (u && (it.x - (u.x + u.w) < 1.2 || complemento)) { u.str += (complemento ? ' ' : '') + it.str.trim(); u.w = it.x + it.w - u.x; }
     else out.push({ str: it.str.trim(), x: it.x, w: it.w });
   }
-  const lista = out.map(a => ({ ...a, str: SIMBOLOS(a.str) }));
+  // acorde em nome de nota ("Lá", "dó# m", "Sib7") -> cifra
+  const lista = out.map(a => { const t = SIMBOLOS(a.str); return { ...a, str: ehAcorde(t) ? t : (solfejoParaAcorde(a.str) || t) }; });
   return todos ? lista : lista.filter(a => ehAcorde(a.str));
 }
 
