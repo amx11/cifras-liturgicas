@@ -102,9 +102,66 @@ export function segmentos(linha) {
   return segs.filter((s, i) => i > 0 || s.acorde || s.texto);
 }
 
+// Repetição: em cada sinal que FECHA um trecho repetido (/: … :/, |: … :|) garante o "(2x)" logo depois,
+// para o músico ver no fim da frase quantas vezes repetir. Sinais abrem e fecham alternadamente.
+export function marcarRepeticoes(texto) {
+  const jaTemVezes = /^\s*\.?\s*(\(?\s*\d+\s*x\b|bis\b)/i;
+  return texto.split(/(\n[ \t]*\n)/).map(par => {
+    let aberto = false;
+    return par.replace(/(\[[^\]]*\]|[a-z]+:\/\/\S*)|(\/:|:\/|\|:|:\||:\\)/gi, (todo, ignorar, sinal, pos, s) => {
+      if (ignorar) return todo;                                  // acorde ou endereço (https://)
+      if (sinal === '/:' || sinal === '|:') { aberto = true; return todo; }
+      const inicioLinha = s.lastIndexOf('\n', pos - 1) + 1;
+      const antes = s.slice(inicioLinha, pos).replace(/\[[^\]]*\]/g, '');
+      if (sinal === ':/' && !aberto && !antes.trim()) { aberto = true; return todo; }   // ":/" abrindo no começo da linha
+      aberto = false;
+      const fimLinha = s.indexOf('\n', pos); 
+      const depois = s.slice(pos + todo.length, fimLinha < 0 ? undefined : fimLinha).replace(/\[[^\]]*\]/g, '');
+      if (jaTemVezes.test(depois) || /\(\s*\d+\s*x\s*\)\s*\.?\s*$/i.test(antes) || /\bbis\s*$/i.test(antes)) return todo;
+      return todo + ' (2x)';
+    });
+  }).join('');
+}
+
+const MARCA_REFRAO = /^\s*(R\s*[.:]|Refr[ãa]o\b|Ref\s*[.:])/i;
+const NUMERO_ESTROFE = /^\s*\d+\s*(ª|a\b)?\s*[.)\-–:]/;
+const textoDaLinha = l => (l.segs || []).map(s => s.texto).join('');
+
+// Marca as linhas de refrão (l.refrao = true): o parágrafo inteiro que começa com "R."/"Refrão", e — quando a
+// música não usa essa marca mas tem estrofes numeradas — os parágrafos sem número (o refrão cantado entre elas)
+function marcarRefroes(linhas) {
+  const pars = [];
+  let atual = [];
+  for (const l of linhas) {
+    if (l.tipo === 'vazia') { if (atual.length) pars.push(atual); atual = []; }
+    else if (l.tipo === 'letra') atual.push(l);
+  }
+  if (atual.length) pars.push(atual);
+  const numeradas = pars.filter(p => NUMERO_ESTROFE.test(textoDaLinha(p[0]))).length;
+  const usaMarca = pars.some(p => p.some(l => MARCA_REFRAO.test(textoDaLinha(l))));
+  for (const p of pars) {
+    const primeira = textoDaLinha(p[0]).trim();
+    let ehRefrao;
+    if (usaMarca) ehRefrao = null;   // decide linha a linha abaixo
+    else ehRefrao = numeradas >= 2 && !NUMERO_ESTROFE.test(primeira)
+      && !/^([a-z]\)|\(|\.\.\.|…|(intro|final|solo|tom|obs|ou)\b)/i.test(primeira) && /[a-zà-ú]{3}/i.test(primeira);
+    if (ehRefrao === null) {
+      // do "R." até a próxima estrofe numerada (ou o fim do parágrafo)
+      let dentro = false;
+      for (const l of p) {
+        const t = textoDaLinha(l);
+        if (MARCA_REFRAO.test(t)) dentro = true;
+        else if (NUMERO_ESTROFE.test(t)) dentro = false;
+        if (dentro) l.refrao = true;
+      }
+    } else if (ehRefrao) p.forEach(l => { l.refrao = true; });
+  }
+}
+
 export function parseChordPro(texto) {
   const meta = {};
   const linhas = [];
+  texto = marcarRepeticoes(texto || '');
   for (const bruta of texto.split(/\r?\n/)) {
     const d = bruta.match(/^\{(\w+)(?::\s*(.*))?\}\s*$/);
     if (d) {
@@ -119,6 +176,7 @@ export function parseChordPro(texto) {
     const temTexto = segs.some(s => s.texto.trim());
     linhas.push({ tipo: temTexto ? 'letra' : 'acordes', segs });
   }
+  marcarRefroes(linhas);
   return { meta, linhas };
 }
 
@@ -515,8 +573,7 @@ export function renderizarHTML(chordpro, { semitons = 0, bemol = false, mostrarA
       html.push(`<div class="l so-acordes">${l.segs.map(s => `<b class="ac">${esc(s.acorde)}</b>`).join(' ')}</div>`);
       continue;
     }
-    const textoLinha = l.segs.map(s => s.texto).join('');
-    const refrao = /^\s*(R\.|Refr[ãa]o|Ref\.)/i.test(textoLinha);
+    const refrao = !!l.refrao;
     const temAcorde = mostrarAcordes && l.segs.some(s => s.acorde);
     const partes = l.segs.map(s => {
       const t = esc(s.texto) || '&nbsp;';
@@ -548,7 +605,7 @@ export function linhasCifra(chordpro, { semitons = 0, bemol = false, mostrarAcor
       baixo += s.texto;
     }
     if (mostrarAcordes && cima.trim()) out.push({ tipo: 'acordes', texto: cima.replace(/\s+$/, '') });
-    out.push({ tipo: 'letra', texto: baixo.replace(/\s+$/, '') });
+    out.push({ tipo: 'letra', texto: baixo.replace(/\s+$/, ''), refrao: !!l.refrao });
   }
   return out;
 }

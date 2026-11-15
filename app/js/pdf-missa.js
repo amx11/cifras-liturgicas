@@ -97,7 +97,7 @@ export function gerarPDF(JsPDF, missa, opcoes = {}) {
       garantir(alt + 1);
       if (l.tipo === 'acordes') fonte('courier', 'bold', tam, cor.acorde);
       else if (l.tipo === 'comentario') fonte('courier', 'italic', tam, cor.suave);
-      else fonte('courier', 'normal', tam);
+      else fonte('courier', l.refrao ? 'bold' : 'normal', tam);
       doc.text(limpar(l.texto), PAG.esq, y + tam * MM_POR_PT * 0.85);
       y += alt;
     }
