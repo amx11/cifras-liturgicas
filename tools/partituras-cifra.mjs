@@ -63,7 +63,8 @@ for (const m of dados.musicas) {
     let r = await partituraParaCifra(pdfjs, new Uint8Array(readFileSync(par)));
     // partitura em imagem (escaneada / sem texto): leitura pela imagem
     let porImagem = false;
-    if (contar(r.chordpro) < 3 && await semTexto(par)) {
+    // sem texto nenhum, ou a letra está desenhada como figura (só os acordes saem como texto)
+    if ((contar(r.chordpro) < 3 && await semTexto(par)) || (contar(r.chordpro) >= 3 && qualidade(r.chordpro).palavras < 12)) {
       r = await partituraImagemParaCifra(m.id, par); porImagem = true; r.duvidas = [];
       if (r.confianca < 70) { if (VERBOSO) console.log('imagem ilegível demais', m.id, m.nome, r.confianca); r.chordpro = ''; }   // fica só a partitura
     }
