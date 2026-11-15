@@ -115,6 +115,20 @@ async function api(req, res, url) {
     return createReadStream(mxl).pipe(res);
   }
 
+  // Repertórios propostos da Arquidiocese: atualiza (só os mais recentes e os novos) e devolve o arquivo
+  if (url.pathname === '/api/repertorios') {
+    const arq = join(RAIZ, 'data', 'repertorios.json');
+    const idade = existsSync(arq) ? Date.now() - (await stat(arq)).mtimeMs : Infinity;
+    if (idade > 6 * 3600e3) await new Promise(ok => {
+      const p = spawn(process.execPath, [fileURLToPath(new URL('../tools/importar-repertorios.mjs', import.meta.url))], { stdio: 'ignore' });
+      const t = setTimeout(() => { p.kill(); ok(); }, 60_000);
+      p.on('close', () => { clearTimeout(t); ok(); }); p.on('error', () => { clearTimeout(t); ok(); });
+    });
+    if (!existsSync(arq)) return json(res, 404, { erro: 'sem repertórios' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return createReadStream(arq).pipe(res);
+  }
+
   if (url.pathname === '/api/correcao' && req.method === 'POST') {
     let corpo = '';
     for await (const c of req) { corpo += c; if (corpo.length > 2e6) return json(res, 413, { erro: 'grande demais' }); }

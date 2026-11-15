@@ -62,6 +62,22 @@ export async function carregarAcervo() {
   montarIndice();
 }
 
+// Repertórios propostos pela Arquidiocese (um por fim de semana): com o servidor local vêm atualizados do site;
+// no app publicado, do arquivo gerado por tools/importar-repertorios.mjs
+let repertorios = null;
+export async function carregarRepertorios() {
+  if (repertorios) return repertorios;
+  for (const url of ['/api/repertorios', 'data/repertorios.json']) {
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), url.startsWith('/api') ? 70_000 : 15_000);
+      const r = await fetch(url, { cache: 'no-cache', signal: ctl.signal });
+      clearTimeout(t);
+      if (r.ok && (r.headers.get('content-type') || '').includes('json')) { repertorios = (await r.json()).repertorios || []; return repertorios; }
+    } catch { /* tenta o próximo */ }
+  }
+  return [];
+}
+
 // Quando o tom de referência de uma música muda no acervo (m.tomAntes -> m.tom), as escolhas salvas
 // (tom da música e tom de cada canto nas missas) são convertidas para continuar soando igual.
 function migrarTons() {
