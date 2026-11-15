@@ -54,8 +54,25 @@ node tools/importar-arquipoa.mjs
 Baixa a lista, os PDFs (guardados em `tools/cache/`) e gera `app/data/musicas.json`; as cifras escaneadas
 vão para `app/data/pdf/`. Leva cerca de 50 minutos na primeira vez.
 
-Depois de reimportar, rode também `node tools/ocr-escaneadas.mjs` (usa o cache em `tools/cache/ocr`; com
-`--refazer` lê tudo de novo, ~25 min em 6 processos: `--lote=0/6` … `--lote=5/6`).
+Depois de reimportar:
+
+```
+node tools/baixar-partituras.mjs     # partituras (devagar: o site recusa downloads rápidos; ~2 h)
+sh tools/reprocessar.sh              # refaz todas as cifras a partir do que foi baixado
+```
+
+O `reprocessar.sh` roda, nesta ordem:
+
+1. `reconverter-texto.mjs` — cifras em PDF de texto;
+2. `ocr-escaneadas.mjs` — cifras escaneadas (usa o cache em `tools/cache/ocr`; com `--refazer` lê tudo de
+   novo, ~25 min em lotes paralelos `--lote=0/6` … `--lote=5/6`);
+3. `partituras-cifra.mjs` — partitura → cifra (acorde na sílaba da nota; quando a partitura também traz o
+   bloco de cifra digitado, vale o texto do bloco com a sílaba corrigida pela pauta) e cópia das
+   partituras para `app/data/partitura/`;
+4. `separar-paginas.mjs` — mesma música repetida no PDF (outro tom → anotado; "versão simplificada" →
+   versão separada);
+5. `conferir-partituras.mjs` — confere cada cifra com a partitura da mesma música (mesmo arranjo) e
+   corrige a sílaba dos acordes deslocados na digitação.
 
 ## YouTube e letra automática (opcional)
 
@@ -70,9 +87,10 @@ defina `WHISPER_MODELO=medium`). O resultado é um rascunho: revise antes de sal
 
 ## Celular Android
 
-O app é um PWA: aberto no Chrome do celular, “Adicionar à tela inicial” instala como aplicativo.
-Para isso ele precisa estar hospedado num endereço acessível pelo celular (ex.: GitHub Pages, ou o servidor
-do computador acessível na rede). O microfone no celular exige endereço **https**.
+O app está publicado em **https://amx11.github.io/cifras-liturgicas/** (GitHub Pages, branch `gh-pages`).
+No Chrome do celular: menu ⋮ → “Instalar app”. Depois de aberto uma vez, funciona sem internet.
+
+Para publicar uma atualização: `git subtree split --prefix app -b gh-pages && git push -f origin gh-pages`.
 
 ## Estrutura
 
@@ -81,4 +99,6 @@ do computador acessível na rede). O microfone no celular exige endereço **http
   - `js/acordes-audio.js` — reconhecimento de acordes por áudio
   - `js/dados.js`, `js/missas.js`, `js/importar.js`, `js/ouvir.js`, `js/app.js`
 - `server/` — servidor local (app + YouTube + Whisper)
-- `tools/` — importador do acervo da arquidiocese
+  - `js/ocr.js`, `js/ocr-cifra.js` — leitura de foto/PDF escaneado (Tesseract, sem internet)
+  - `js/partitura.js` — partitura (PDF vetorial) → cifra; `js/conferir.js` — confere cifra × partitura
+- `tools/` — importador do acervo da arquidiocese e conversões (veja acima)

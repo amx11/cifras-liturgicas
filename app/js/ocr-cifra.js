@@ -228,7 +228,7 @@ export function paraChordPro(ocr, ESCALA = 300 / 72, opcoes = {}) {
         if (ehAcordes) {
           const a = aprox[k];
           // ilegível: "?" no lugar exato (o músico vê que falta um acorde ali) e a música fica para conferir
-          if (!a || a.ruido) { duvidas.push(`acorde ilegível “${str}”`); anotar(`acorde ilegível “${str}”`, w, l, ip); itens.push({ str: '?', x: w.x0 / ESCALA, y, w: (w.x1 - w.x0) / ESCALA, h, pagina: ip + 1, cs: w.xe ? [(w.xs[0] + Math.min(w.xe[0] - w.xs[0], larguraLetra * 1.25) / 2) / ESCALA] : undefined }); continue; }
+          if (!a || a.ruido) { duvidas.push(`acorde ilegível “${str}”`); anotar(`acorde ilegível “${str}”`, w, l, ip); itens.push({ str: '?', ocr: true, x: w.x0 / ESCALA, y, w: (w.x1 - w.x0) / ESCALA, h, pagina: ip + 1, cs: w.xe ? [(w.xs[0] + Math.min(w.xe[0] - w.xs[0], larguraLetra * 1.25) / 2) / ESCALA] : undefined }); continue; }
           if (!a.certo) { duvidas.push(`${str}→${a.acorde}`); anotar(`lido “${str}”, entendido ${a.acorde}`, w, l, ip); }
           if (typeof w.separado === 'string') { duvidas.push('separado ' + w.separado); anotar(`“${w.separado.split('→')[0]}” separado em ${w.separado.split('→')[1]}`, w, l, ip); }
           str = a.acorde;
@@ -245,7 +245,7 @@ export function paraChordPro(ocr, ESCALA = 300 / 72, opcoes = {}) {
         // caixa larga demais (letras grudadas): a borda esquerda continua certa, o centro vem da largura típica
         const centro = k => (w.xs[k] + Math.min(w.xe[k] - w.xs[k], larguraLetra * 1.25) / 2) / ESCALA;
         const cs = !w.xe ? undefined : str.length === w.xs.length ? w.xs.map((_, k) => centro(k)) : [centro(0)];
-        itens.push({ str, x: w.x0 / ESCALA, y, w: (w.x1 - w.x0) / ESCALA, h, pagina: ip + 1, xs, cs });
+        itens.push({ str, x: w.x0 / ESCALA, y, w: (w.x1 - w.x0) / ESCALA, h, pagina: ip + 1, xs, cs, ocr: true });
       }
     }
   });

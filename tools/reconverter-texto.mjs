@@ -10,10 +10,11 @@ const ARQ = RAIZ + 'app/data/musicas.json';
 const dados = JSON.parse(readFileSync(ARQ, 'utf8'));
 let mudou = 0, linhas = 0;
 for (const m of dados.musicas) {
-  if (m.ocr || !m.chordpro) continue;
+  if (m.ocr || !m.chordpro || m.id >= 100000 || (m.daPartitura && !m.daPartitura.doPdfDeCifra)) continue;
   const arq = `${RAIZ}tools/cache/pdf/${m.id}-cif.pdf`;
   if (!existsSync(arq)) continue;
   const r = await pdfParaCifra(pdfjs, new Uint8Array(readFileSync(arq)));
+  delete m.daPartitura; delete m.originalPdf;        // volta ao texto; partituras-cifra.mjs refaz se for partitura
   if (!r.chordpro.trim() || r.chordpro === m.chordpro) continue;
   const antes = new Set(m.chordpro.split('\n'));
   linhas += r.chordpro.split('\n').filter(l => !antes.has(l)).length;

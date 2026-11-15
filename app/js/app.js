@@ -45,8 +45,14 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
         <div class="barra" style="margin:0">
           <button class="btn peq" data-semi="-1" title="Meio tom abaixo">−½</button>
           <button class="btn peq" data-semi="1" title="Meio tom acima">+½</button>
-          <span class="pequeno suave">Original: <b>${esc(original)}</b>${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
+          <span class="pequeno suave">Original: <b>${esc(original)}</b>${m.outrosTons?.length ? ` (o PDF da arquidiocese traz também em ${m.outrosTons.map(esc).join(', ')})` : ''}${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
         </div></div>` : ''}
+      ${m.conferida && !m.daPartitura ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
+      ${m.daPartitura && m.originalPdf ? `<div class="ocr-aviso nao-imprimir">
+          <span>${m.daPartitura.revisar ? '⚠ Cifra montada a partir da partitura, com pontos a conferir' : m.daPartitura.revisada ? '✓ Cifra montada a partir da partitura e revisada' : '🎼 Cifra montada a partir da partitura (acordes na sílaba da nota)'}.</span>
+          <button type="button" class="btn peq" data-ver-original>Ver original</button>
+          ${m.origem === 'arquipoa' ? `<button type="button" class="btn peq${m.daPartitura.revisar ? ' primario' : ''}" data-revisar>Revisar</button>` : ''}
+        </div><div class="original-escaneado" hidden></div>` : ''}
       ${m.ocr && m.pdfImagem ? `<div class="ocr-aviso nao-imprimir">
           <span>${m.ocr.revisar ? '⚠ Convertida automaticamente do PDF escaneado, com acordes a conferir' + (m.ocr.duvidas?.length ? `: <b>${esc(m.ocr.duvidas.slice(0, 6).join(', '))}</b>` : '') : m.ocr.revisada ? '✓ Convertida do PDF escaneado e revisada' : 'Convertida automaticamente do PDF escaneado'}.</span>
           <button type="button" class="btn peq" data-ver-original>Ver original</button>
@@ -66,7 +72,7 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
       const box = wrap.querySelector('.original-escaneado');
       box.hidden = !box.hidden;
       b.textContent = box.hidden ? 'Ver original' : 'Esconder original';
-      if (!box.hidden && !box.childElementCount) desenharPDF(m.pdfImagem, box);
+      if (!box.hidden && !box.childElementCount) desenharPDF(m.daPartitura && m.originalPdf ? m.originalPdf : m.pdfImagem, box);
       return;
     }
     if (b.hasAttribute('data-revisar')) { location.hash = '#/revisar/' + m.chave; return; }
@@ -131,17 +137,19 @@ function telaMusicas() {
       <select id="ano" aria-label="Ano litúrgico"><option value="">Todos os anos (A, B, C)</option>
         ${Object.entries(tx.anos).map(([k, v]) => `<option value="${k}" ${filtro.ano === +k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
         <option value="minha" ${filtro.origem === 'minha' ? 'selected' : ''}>Só as minhas músicas</option>
-        <option value="revisar" ${filtro.revisar ? 'selected' : ''}>Convertidas do escaneado: para revisar</option>
-        <option value="ocr" ${filtro.ocr ? 'selected' : ''}>Convertidas do escaneado: todas</option></select>
+        <option value="revisar" ${filtro.revisar ? 'selected' : ''}>Convertidas automaticamente: para revisar</option>
+        <option value="ocr" ${filtro.ocr ? 'selected' : ''}>Convertidas do escaneado: todas</option>
+        <option value="partitura" ${filtro.partitura ? 'selected' : ''}>Montadas a partir da partitura</option></select>
     </div>
     <p class="pequeno suave" id="contagem"></p>
     <div id="resultados"></div>
     ${!estado.base?.length ? `<div class="cartao">O acervo da arquidiocese ainda não foi importado. Rode <code>node tools/importar-arquipoa.mjs</code> na pasta do projeto, ou adicione músicas pela aba <a href="#/importar">Importar</a>.</div>` : ''}`;
 
   const atualizar = () => {
-    let res = buscar({ termo: filtro.termo, tempo: filtro.tempo ?? null, parte: filtro.parte ?? null, ano: filtro.ano ?? null, origem: filtro.origem, agrupar: !(filtro.revisar || filtro.ocr) });
-    if (filtro.revisar) res = res.filter(m => m.ocr?.revisar);
+    let res = buscar({ termo: filtro.termo, tempo: filtro.tempo ?? null, parte: filtro.parte ?? null, ano: filtro.ano ?? null, origem: filtro.origem, agrupar: !(filtro.revisar || filtro.ocr || filtro.partitura) });
+    if (filtro.revisar) res = res.filter(m => m.ocr?.revisar || m.daPartitura?.revisar);
     if (filtro.ocr) res = res.filter(m => m.ocr);
+    if (filtro.partitura) res = res.filter(m => m.daPartitura);
     const nVersoes = res.reduce((n, m) => n + (m.totalVersoes > 1 ? 1 : 0), 0);
     document.getElementById('contagem').textContent = `${res.length} ${res.length === 1 ? 'música' : 'músicas'}${nVersoes ? ` · ${nVersoes} com mais de uma versão` : ''}`;
     // Com busca por texto, mantém a ordem de relevância; sem busca, ordem alfabética com letras
@@ -176,7 +184,7 @@ function telaMusicas() {
   tela.querySelector('#ano').onchange = e => {
     const v = e.target.value;
     filtro.origem = v === 'minha' ? 'minha' : null;
-    filtro.revisar = v === 'revisar'; filtro.ocr = v === 'ocr';
+    filtro.revisar = v === 'revisar'; filtro.ocr = v === 'ocr'; filtro.partitura = v === 'partitura';
     filtro.ano = /^\d+$/.test(v) ? +v : null;
     atualizar();
   };
@@ -204,11 +212,13 @@ function telaMusica(chave) {
       <button class="btn" id="copiar">Copiar</button>
       <button class="btn" id="editar" title="${m.origem === 'minha' ? 'Editar esta música' : 'Alterar a cifra ou a letra; fica salva como versão personalizada e o original não muda'}">✎ ${m.origem === 'minha' ? 'Editar' : 'Personalizar'}</button>
       ${m.pdf ? `<a class="btn" href="${esc(m.pdf)}" target="_blank" rel="noopener">PDF</a>` : ''}
-      ${m.partitura ? `<a class="btn" href="${esc(m.partitura)}" target="_blank" rel="noopener">Partitura</a>` : ''}
+      ${m.partituraLocal ? '<button class="btn" id="ver-partitura">🎼 Partitura</button>' : m.partitura ? `<a class="btn" href="${esc(m.partitura)}" target="_blank" rel="noopener">Partitura ↗</a>` : ''}
       ${m.youtube ? `<button class="btn" id="yt">YouTube</button>` : ''}
       ${m.audio ? `<button class="btn" id="audio">Ouvir</button>` : ''}
     </div>
     <div id="midia"></div>
+    <div id="partitura-box" class="cartao nao-imprimir" hidden><div class="barra" style="justify-content:space-between;margin:0 0 8px"><b>Partitura</b>
+      ${m.partitura ? `<a class="pequeno" href="${esc(m.partitura)}" target="_blank" rel="noopener">abrir no site da arquidiocese ↗</a>` : ''}</div><div id="partitura-pdf"></div></div>
     <div id="painel"></div>`;
   const painel = painelCifra(m, {
     tomAlvo: estado.tons[chave],
@@ -224,6 +234,14 @@ function telaMusica(chave) {
   tela.querySelector('#fonte-menos').onclick = () => { estado.prefs.fonte = Math.max(11, estado.prefs.fonte - 1); salvarPrefs(); aplicarPrefs(); };
   tela.querySelector('#fonte-mais').onclick = () => { estado.prefs.fonte = Math.min(40, estado.prefs.fonte + 1); salvarPrefs(); aplicarPrefs(); };
   tela.querySelector('#acordes').onclick = () => { estado.prefs.mostrarAcordes = !estado.prefs.mostrarAcordes; salvarPrefs(); redesenhar(); };
+  const btPart = tela.querySelector('#ver-partitura');
+  if (btPart) btPart.onclick = () => {
+    const box = tela.querySelector('#partitura-box');
+    box.hidden = !box.hidden;
+    btPart.textContent = box.hidden ? '🎼 Partitura' : '🎼 Esconder partitura';
+    if (!box.hidden && !tela.querySelector('#partitura-pdf').childElementCount) desenharPDF(m.partituraLocal, tela.querySelector('#partitura-pdf'));
+    if (!box.hidden) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   tela.querySelector('#copiar').onclick = async () => {
     const texto = `${m.nome}${painel.tom() ? ` (${painel.tom()})` : ''}\n\n${painel.texto()}`;
     try { await navigator.clipboard.writeText(texto); aviso('Cifra copiada'); } catch { aviso('Não foi possível copiar'); }
@@ -290,10 +308,11 @@ export function telaEditar(chave, inicial = {}, opts = {}) {
   const d = { nome: '', complemento: '', chordpro: '', tempos: [], partes: [], cabecalho: [], ...(m || {}), ...inicial };
   if (derivada && !inicial.complemento) d.complemento = 'Versão personalizada';
   const lido = opts.original?.length ? opts.original : null; // imagens da foto/PDF lido pelo OCR (música nova)
-  const lado = (revisar && m.pdfImagem) || lido;
+  const original = revisar ? (m.pdfImagem && m.ocr ? m.pdfImagem : m.originalPdf || m.pdfImagem) : null;
+  const lado = original || lido;
   // pontos duvidosos com lugar no original (OCR): recorte ampliado de cada um
-  const pontos = (revisar && m.pdfImagem ? m.ocr?.locais : lido ? opts.locais : null) || [];
-  const fonte = revisar && m.pdfImagem ? { pdf: m.pdfImagem } : lido ? { imagens: lido } : null;
+  const pontos = (original && m.ocr ? m.ocr?.locais : lido ? opts.locais : null) || [];
+  const fonte = original ? { pdf: original } : lido ? { imagens: lido } : null;
   const tx = estado.taxonomia;
   const marcadores = (campo, ordem, nomes) => ordem.filter(i => nomes[i]).map(i =>
     `<label class="chip" style="display:inline-flex;gap:6px;margin:2px"><input type="checkbox" name="${campo}" value="${i}" ${d[campo].includes(i) ? 'checked' : ''}>${esc(nomes[i])}</label>`).join('');
@@ -328,7 +347,7 @@ export function telaEditar(chave, inicial = {}, opts = {}) {
       <p class="pequeno" id="pontos-prog"></p></details>` : ''}
       ${revisar || lido ? '<h2>Prévia</h2><div class="cartao"><div class="cifra" id="previa-viva"></div></div>' : ''}
     </form>
-    ${revisar && m.pdfImagem ? '<div class="revisao-original"><div class="pequeno suave">Original escaneado</div><div id="orig"></div></div>' : ''}
+    ${original ? `<div class="revisao-original"><div class="pequeno suave">${m.daPartitura ? 'Partitura original' : 'Original escaneado'}</div><div id="orig"></div></div>` : ''}
     ${lido ? `<div class="revisao-original"><div class="pequeno suave">Original lido</div>${lido.map((u, i) => `<img class="pagina-escaneada" src="${u}" alt="Página ${i + 1} do original">`).join('')}</div>` : ''}
     </div>`;
   if (revisar || lido) {
@@ -350,7 +369,7 @@ export function telaEditar(chave, inicial = {}, opts = {}) {
         }
       });
     }
-    if (revisar && m.pdfImagem) requestAnimationFrame(() => desenharPDF(m.pdfImagem, tela.querySelector('#orig')));
+    if (original) requestAnimationFrame(() => desenharPDF(original, tela.querySelector('#orig')));
   }
   const f = tela.querySelector('#f');
   const ler = () => ({
@@ -393,7 +412,14 @@ export function telaEditar(chave, inicial = {}, opts = {}) {
       return;
     }
     let destino = chave;
-    if (derivada) destino = criarPersonalizada(chave, dados);
+    if (derivada) {
+      // nada mudou em relação ao original (no mesmo tom): não cria uma versão repetida
+      const limpa = t => (t || '').replace(/\s+$/gm, '').trim();
+      const igual = limpa(dados.chordpro) === limpa(m.chordpro) && dados.nome === m.nome
+        && (!opts.tomAtual || opts.tomAtual === m.tom);
+      if (igual) { aviso('Nada foi alterado: a versão personalizada não foi criada'); irPara(opts.voltar || '#/musica/' + chave); return; }
+      destino = criarPersonalizada(chave, dados);
+    }
     else if (m) destino = editarMusica(chave, dados) ? chave : null;
     else destino = salvarMinha(dados);
     if (!destino) { aviso('Não foi possível salvar (armazenamento cheio?)'); return; }
