@@ -1,5 +1,5 @@
 // Montagem de missas: roteiro de cantos por parte da missa, troca de cantos e de tom
-import { estado, musica, buscar, versoes, rotuloVersao, salvarMissas, salvarPrefs } from './dados.js';
+import { estado, musica, buscar, versoes, rotuloVersao, salvarMissas, salvarPrefs, carregarRepertorios } from './dados.js';
 import { esc, aviso, modal, confirmar, irPara, ORDEM_TEMPOS, COR_TEMPO, nomeTempo, nomeParte, listaAlfabetica, itemMusica } from './ui.js';
 import { painelCifra, telaEditar } from './app.js';
 import { chordproNoTom } from './cifra.js';
@@ -124,6 +124,70 @@ function anoPorData(d) {
   return [3, 1, 2][n % 3];
 }
 
+// ---------- Repertório proposto pela Arquidiocese ----------
+// repertório do fim de semana de uma data: o de mesma data; senão o mais próximo entre 1 dia antes e 6 depois
+// (sábado à noite → domingo; dia de semana → domingo seguinte)
+export function repertorioDaData(reps, isoData) {
+  if (!isoData) return null;
+  const d = new Date(isoData + 'T12:00').getTime();
+  let melhor = null, dist = Infinity;
+  for (const r of reps) {
+    if (!r.data) continue;
+    const dias = Math.round((new Date(r.data + 'T12:00').getTime() - d) / 864e5);
+    if (dias < -1 || dias > 6) continue;
+    const peso = dias === 0 ? -1 : Math.abs(dias);
+    if (peso < dist) { dist = peso; melhor = r; }
+  }
+  return melhor;
+}
+
+const NOTAS_PT = { do: 'C', re: 'D', mi: 'E', fa: 'F', sol: 'G', la: 'A', si: 'B' };
+// "Lá maior", "Mi menor", "Fá# maior", "Si bemol maior" → tom no formato do app (A, Em, F#, Bb)
+function tomDoTexto(t) {
+  const m = t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .match(/\b(do|re|mi|fa|sol|la|si)\s*(#|b\b|sustenido|bemol)?\s*(maior|menor)\b/);
+  if (!m) return null;
+  return NOTAS_PT[m[1]] + (m[2] ? (m[2] === '#' || m[2] === 'sustenido' ? '#' : 'b') : '') + (m[3] === 'menor' ? 'm' : '');
+}
+
+// parte da missa de cada canto do repertório: pelo texto do site (Entrada, Oferendas…) e, se não disser, pela classificação do canto
+const ROTULO_PARTE = { 4: 'Entrada', 5: 'Ato penitencial', 1: 'Glória', 6: 'Salmo responsorial', 3: 'Aclamação ao Evangelho',
+  10: 'Apresentação das oferendas', 2: 'Santo', 15: 'Cordeiro de Deus', 16: 'Comunhão', 18: 'Final', 19: 'Presidência e assembleia' };
+function parteDoCanto(texto, m) {
+  const t = texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (/aclamacao memorial|memorial|todas as vezes|anunciamos/.test(t)) return ['Aclamação memorial', 19];
+  if (/doxologia/.test(t)) return ['Doxologia', 19];
+  if (/\bentrada\b/.test(t)) return ['Entrada', 4];
+  if (/oferend|ofertorio/.test(t)) return ['Apresentação das oferendas', 10];
+  if (/comunhao/.test(t)) return ['Comunhão', 16];
+  if (/acao de gracas/.test(t)) return ['Ação de graças', 18];
+  if (/\b(final|envio)\b/.test(t)) return ['Final', 18];
+  const p = m?.partes?.find(x => ROTULO_PARTE[x]);
+  if (p) return [ROTULO_PARTE[p], p];
+  if (/salmo/.test(t)) return ['Salmo responsorial', 6];
+  if (/aleluia|aclamacao/.test(t)) return ['Aclamação ao Evangelho', 3];
+  if (/cordeiro/.test(t)) return ['Cordeiro de Deus', 15];
+  if (/\bsanto\b/.test(t)) return ['Santo', 2];
+  if (/gloria/.test(t)) return ['Glória', 1];
+  if (/senhor,? (que|tende)|kyrie|piedade/.test(t)) return ['Ato penitencial', 5];
+  return ['Canto', null];
+}
+
+// itens da missa na ordem do repertório; a mesma parte repetida (opções ou mais de um canto) vira "Comunhão (2)"
+export function itensDoRepertorio(rep) {
+  const itens = [], cont = {};
+  let fora = 0;
+  for (const c of rep.musicas) {
+    const m = c.id ? musica('a' + c.id) : null;
+    if (!m) { fora++; continue; }
+    const [rotulo, parte] = parteDoCanto(c.texto, m);
+    cont[rotulo] = (cont[rotulo] || 0) + 1;
+    const tom = tomDoTexto(c.texto);
+    itens.push({ rotulo: cont[rotulo] > 1 ? `${rotulo} (${cont[rotulo]})` : rotulo, parte, chave: m.chave, tom: tom && tom !== m.tom ? tom : null });
+  }
+  return { itens, fora };
+}
+
 // ---------- Lista de missas ----------
 export function telaMissas(tela) {
   const missas = estado.missas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
@@ -149,7 +213,9 @@ export function novaMissa(aoCriar) {
       <label class="campo"><span>Data</span><input type="date" name="data" value="${iso}"></label>
       <label class="campo"><span>Tempo litúrgico</span><select name="tempo">${ORDEM_TEMPOS.filter(t => tx.tempos[t]).map(t => `<option value="${t}">${esc(tx.tempos[t])}</option>`).join('')}</select></label>
       <label class="campo"><span>Ano litúrgico</span><select name="ano"><option value="">—</option>${Object.entries(tx.anos).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select></label>
-      <label><input type="checkbox" name="roteiro" checked> Já criar as partes da missa (Entrada, Glória, Salmo...)</label>
+      <label class="campo"><span>Repertório proposto pela Arquidiocese</span><select name="rep"><option value="">carregando…</option></select></label>
+      <p class="pequeno suave" id="rep-info" style="margin-top:-.4em"></p>
+      <label id="rot"><input type="checkbox" name="roteiro" checked> Já criar as partes da missa (Entrada, Glória, Salmo...)</label>
       <div class="barra" style="justify-content:flex-end"><button type="button" class="btn" data-fechar>Cancelar</button><button class="btn primario">Criar</button></div>
     </form>`);
   const f = el.querySelector('#nm');
@@ -159,13 +225,45 @@ export function novaMissa(aoCriar) {
     f.tempo.value = tempoPorData(d);
     f.ano.value = anoPorData(d);
   };
-  f.data.onchange = sugerir; sugerir();
+  let reps = [], tituloMexido = false;
+  f.titulo.oninput = () => { tituloMexido = true; };
+  const info = el.querySelector('#rep-info');
+  const mostrarRep = () => {
+    const r = reps.find(x => String(x.id) === f.rep.value);
+    el.querySelector('#rot').hidden = !!r;
+    if (!r) { info.textContent = reps.length ? 'Sem repertório: a missa começa vazia ou só com as partes.' : ''; return; }
+    const { itens, fora } = itensDoRepertorio(r);
+    info.textContent = `${itens.length} cantos já entram na missa, na ordem proposta${fora ? ` (${fora} não estão no acervo)` : ''}. Depois é só trocar o que quiser.`;
+    if (!tituloMexido) f.titulo.value = r.nome;
+  };
+  const escolherPelaData = () => {
+    if (!reps.length) return;
+    const r = repertorioDaData(reps, f.data.value);
+    f.rep.value = r ? String(r.id) : '';
+    if (!r && !tituloMexido) f.titulo.value = 'Missa de domingo';
+    mostrarRep();
+  };
+  f.data.onchange = () => { sugerir(); escolherPelaData(); }; sugerir();
+  f.rep.onchange = mostrarRep;
+  carregarRepertorios().then(lista => {
+    reps = lista.filter(r => r.musicas?.length);
+    const fmt = r => (r.data ? new Date(r.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' · ' : '') + r.nome;
+    const datados = reps.filter(r => r.data).sort((a, b) => b.data.localeCompare(a.data)), outros = reps.filter(r => !r.data);
+    f.rep.innerHTML = `<option value="">— não usar —</option>`
+      + (datados.length ? `<optgroup label="Por data">${datados.map(r => `<option value="${r.id}">${esc(fmt(r))}</option>`).join('')}</optgroup>` : '')
+      + (outros.length ? `<optgroup label="Outros (sem data)">${outros.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('')}</optgroup>` : '');
+    if (!reps.length) { f.rep.innerHTML = '<option value="">indisponível (sem internet?)</option>'; f.rep.disabled = true; }
+    escolherPelaData();
+  });
   f.onsubmit = e => {
     e.preventDefault();
+    const rep = reps.find(x => String(x.id) === f.rep.value);
     const missa = { id: novoId(), titulo: f.titulo.value.trim() || 'Missa', data: f.data.value, tempo: +f.tempo.value || null,
-      ano: +f.ano.value || null, itens: f.roteiro.checked ? ROTEIRO.map(([rotulo, parte]) => ({ rotulo, parte, chave: null, tom: null })) : [] };
+      ano: +f.ano.value || null, repertorio: rep ? rep.id : undefined,
+      itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? ROTEIRO.map(([rotulo, parte]) => ({ rotulo, parte, chave: null, tom: null })) : [] };
     estado.missas.push(missa); estado.prefs.missaAtiva = missa.id; salvarPrefs(); foco.idx = null; salvar(); fechar();
-    if (aoCriar) aoCriar(missa); else if (location.hash === '#/musicas') window.dispatchEvent(new Event('missa-mudou')); else location.hash = '#/musicas';
+    if (rep) aviso(`Missa montada com o repertório da Arquidiocese: ${rep.nome}`);
+    if (aoCriar) aoCriar(missa); else if (rep) location.hash = '#/missa/' + missa.id; else if (location.hash === '#/musicas') window.dispatchEvent(new Event('missa-mudou')); else location.hash = '#/musicas';
   };
 }
 
