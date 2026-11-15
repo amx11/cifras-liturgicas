@@ -58,6 +58,11 @@ export async function carregarAcervo() {
     const r = await fetch('data/pasta.json', { cache: 'no-cache' });
     if (r.ok) for (const m of (await r.json()).musicas) estado.base.push({ ...m, chave: 'p' + m.id, origem: 'pasta' });
   } catch { /* opcional */ }
+  // Cifras avulsas acrescentadas a pedido (de outros sites), também agrupadas como versões do mesmo título
+  try {
+    const r = await fetch('data/adicionadas.json', { cache: 'no-cache' });
+    if (r.ok) for (const m of (await r.json()).musicas) estado.base.push({ ...m, chave: 'x' + m.id, origem: 'adicionada' });
+  } catch { /* opcional */ }
   migrarTons();
   montarIndice();
 }
@@ -139,7 +144,7 @@ function montarIndice() {
     const tamanho = new Map();
     for (const m of todas) if (m.origem === 'arquipoa') { const k = grupoDe.get(m.chave); tamanho.set(k, (tamanho.get(k) || 0) + 1); }
     for (const m of todas) {
-      if (m.origem !== 'pasta') continue;
+      if (m.origem !== 'pasta' && m.origem !== 'adicionada') continue;
       const k = chaveGrupo(m.nome);
       const cands = [...tamanho.keys()].filter(g => g === k || g.startsWith(k + '|'));
       if (cands.length) grupoDe.set(m.chave, cands.sort((a, b) => tamanho.get(b) - tamanho.get(a))[0]);
