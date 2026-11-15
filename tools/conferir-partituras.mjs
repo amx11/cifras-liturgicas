@@ -18,7 +18,7 @@ for (const m of dados.musicas) if (m.chordpro && !m.ocr && !m.daPartitura)
 definirVocabulario([...vocab]);
 
 const contar = cp => (cp.match(/\[/g) || []).length;
-let conferidas = 0, corrigidas = 0, acordesMovidos = 0, outroArranjo = 0;
+let conferidas = 0, corrigidas = 0, acordesMovidos = 0, outroArranjo = 0, renomeados = 0;
 for (const m of dados.musicas) {
   delete m.conferida;
   if (!m.chordpro || m.daPartitura || m.id >= 100000) continue;
@@ -26,15 +26,16 @@ for (const m of dados.musicas) {
   if (!existsSync(par)) continue;
   const p = await partituraParaCifra(pdfjs, new Uint8Array(readFileSync(par)), { forcar: 'pauta' });
   if (contar(p.chordpro) < 5) continue;
-  const r = conferirComPartitura(m.chordpro, p.chordpro);
+  const r = conferirComPartitura(m.chordpro, p.chordpro, { nomes: !!m.ocr });
   // mesmo arranjo: pelo menos 40% dos acordes da cifra foram encontrados na partitura, na mesma palavra
   if (r.comparados < 5 || r.comparados < contar(m.chordpro) * 0.4) { outroArranjo++; continue; }
   conferidas++;
-  m.conferida = { comparados: r.comparados, movidos: r.movidos, semitons: r.semitons };
-  // a partitura conferiu a maioria dos acordes: as dúvidas de posição do OCR estão resolvidas
+  m.conferida = { comparados: r.comparados, movidos: r.movidos, renomeados: r.renomeados, semitons: r.semitons };
+  if (r.renomeados && !r.movidos) { m.chordpro = r.chordpro; renomeados += r.renomeados; }
+  // a partitura conferiu a maioria dos acordes: as dúvidas de posição e de nome do OCR estão resolvidas
   if (m.ocr?.locais && r.comparados >= contar(m.chordpro) * 0.6) {
-    m.ocr.locais = m.ocr.locais.filter(l => !l.d.startsWith('posição'));
-    m.ocr.duvidas = (m.ocr.duvidas || []).filter(d => !d.startsWith('posição'));
+    m.ocr.locais = m.ocr.locais.filter(l => !l.d.startsWith('posição') && !l.d.startsWith('lido') && !(l.d.startsWith('acorde ilegível') && !m.chordpro.includes('[?]')));
+    m.ocr.duvidas = (m.ocr.duvidas || []).filter(d => !d.startsWith('posição') && !d.includes('→'));
     m.ocr.revisar = m.ocr.locais.length > 0;
   }
   if (r.movidos) {
@@ -43,8 +44,8 @@ for (const m of dados.musicas) {
       console.log(`== ${m.id} ${m.nome}: ${r.movidos} de ${r.comparados}`);
       for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) console.log('   ' + a[i] + '\n → ' + b[i]);
     }
-    m.chordpro = r.chordpro; corrigidas++; acordesMovidos += r.movidos;
+    m.chordpro = r.chordpro; corrigidas++; acordesMovidos += r.movidos; renomeados += r.renomeados;
   }
 }
 if (SALVAR) writeFileSync(ARQ, JSON.stringify(dados));
-console.log(`${conferidas} cifras conferidas com a partitura (${corrigidas} tinham acordes deslocados: ${acordesMovidos} acordes corrigidos) · ${outroArranjo} partituras de outro arranjo (não usadas)`);
+console.log(`${conferidas} cifras conferidas com a partitura (${corrigidas} tinham acordes deslocados: ${acordesMovidos} acordes corrigidos; ${renomeados} nomes de acorde corrigidos) · ${outroArranjo} partituras de outro arranjo (não usadas)`);
