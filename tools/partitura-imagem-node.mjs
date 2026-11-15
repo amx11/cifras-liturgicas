@@ -54,3 +54,33 @@ export async function partituraImagemParaCifra(id, arquivo) {
   if (novo) writeFileSync(arqCache, JSON.stringify(cache));
   return r;
 }
+
+// ---------- Audiveris (leitura óptica de partitura) ----------
+// Instalado em ~/.local/audiveris (pacote oficial extraído, com Java embutido) e idiomas completos em
+// ~/.local/audiveris/tessdata (o Audiveris usa o motor legado do Tesseract). Cache do MusicXML em tools/cache/omr/.
+import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
+import { musicxmlParaChordPro } from '../app/js/musicxml.js';
+export const AUDIVERIS = homedir() + '/.local/audiveris/opt/audiveris/bin/Audiveris';
+const CACHE_OMR = RAIZ + 'tools/cache/omr/';
+export function temAudiveris() { return existsSync(AUDIVERIS); }
+export function audiverisMusicXml(arquivo, pasta = CACHE_OMR, nome = null) {
+  mkdirSync(pasta, { recursive: true });
+  const base = pasta + (nome || arquivo.split('/').pop().replace(/\.[^.]+$/, ''));
+  if (!existsSync(base + '.mxl')) {
+    try {
+      execFileSync(AUDIVERIS, ['-batch', '-export', '-output', pasta, '-constant', 'org.audiveris.omr.text.Language.defaultSpecification=por', '--', arquivo],
+        { env: { ...process.env, TESSDATA_PREFIX: homedir() + '/.local/audiveris/tessdata' }, stdio: 'ignore', timeout: 600000 });
+    } catch { /* sem resultado */ }
+  }
+  if (!existsSync(base + '.mxl')) return null;
+  const { unzipSync, strFromU8 } = require('fflate');
+  const z = unzipSync(new Uint8Array(readFileSync(base + '.mxl')));
+  const nomeXml = Object.keys(z).find(n => n.endsWith('.xml') && !n.includes('META'));
+  return nomeXml ? strFromU8(z[nomeXml]) : null;
+}
+export function audiverisParaCifra(arquivo) {
+  if (!temAudiveris()) return null;
+  const xml = audiverisMusicXml(arquivo);
+  return xml ? musicxmlParaChordPro(xml) : null;
+}

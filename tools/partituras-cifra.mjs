@@ -5,8 +5,9 @@
 // Uso: node tools/partituras-cifra.mjs [--sem-salvar] [-v]
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { detectarTom, normalizar } from '../app/js/cifra.js';
+import { separarCabecalho } from '../app/js/pdf.js';
 import { partituraParaCifra, definirVocabulario } from '../app/js/partitura.js';
-import { partituraImagemParaCifra, encerrar as encerrarOcr } from './partitura-imagem-node.mjs';
+import { partituraImagemParaCifra, encerrar as encerrarOcr, audiverisParaCifra } from './partitura-imagem-node.mjs';
 
 const RAIZ = new URL('../', import.meta.url).pathname;
 const pdfjs = await import(RAIZ + 'node_modules/pdfjs-dist/legacy/build/pdf.mjs');
@@ -37,6 +38,11 @@ async function temPauta(arq) {
 }
 
 const contar = cp => (cp.match(/\[/g) || []).length;
+// índice de qualidade sem gabarito: palavras conhecidas (3+ letras) + acordes dentro de palavras
+const indiceQualidade = cp => !cp ? 0 : cp.replace(/\[[^\]]*\]/g, '').split(/[\s\-–,.;:!?()"'“”_]+/).filter(w => w.length >= 3 && vocab.has(w.toLowerCase().normalize('NFC'))).length
+  + (cp.match(/[A-Za-zÀ-ÿ]\[[^\]]+\][A-Za-zÀ-ÿ]|\s\[[^\]]+\][A-Za-zÀ-ÿ]/g) || []).length;
+// fração das palavras longas (4+ letras) que existem no vocabulário: lixo de OCR fica baixo
+const conhecidasLongas = cp => { const ws = cp.replace(/\[[^\]]*\]/g, '').split(/[\s\-–,.;:!?()"'“”_]+/).map(w => w.toLowerCase().normalize('NFC')).filter(w => /^[a-zà-ÿ]{4,}$/.test(w)); return ws.length >= 8 ? ws.filter(w => vocab.has(w)).length / ws.length : 0; };
 async function semTexto(arq) {
   const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(arq)), verbosity: 0 }).promise;
   let n = 0;
@@ -51,7 +57,7 @@ function qualidade(cp) {
   const ws = cp.replace(/\[[^\]]*\]/g, ' ').split(/[\s\-–,.;:!?()"'“”_]+/).map(w => w.toLowerCase().normalize('NFC').replace(/[^a-zà-ÿ]/g, '')).filter(w => w.length >= 2);
   return { palavras: ws.length, conhecidas: ws.length ? ws.filter(w => vocab.has(w)).length / ws.length : 0 };
 }
-let novas = 0, refeitas = 0, semAcordes = 0, copiadas = 0, outraMusica = 0;
+let novas = 0, refeitas = 0, semAcordes = 0, copiadas = 0, outraMusica = 0, porAudiveris = 0;
 for (const m of dados.musicas) {
   if (m.id >= 100000) continue;
   const par = `${RAIZ}tools/cache/pdf/${m.id}-par.pdf`;
@@ -67,6 +73,14 @@ for (const m of dados.musicas) {
     if ((contar(r.chordpro) < 3 && await semTexto(par)) || (contar(r.chordpro) >= 3 && qualidade(r.chordpro).palavras < 12)) {
       r = await partituraImagemParaCifra(m.id, par); porImagem = true; r.duvidas = [];
       if (r.confianca < 70) { if (VERBOSO) console.log('imagem ilegível demais', m.id, m.nome, r.confianca); r.chordpro = ''; }   // fica só a partitura
+      // segunda opinião: Audiveris (leitura óptica de partitura); fica o melhor, se a letra dele for legível
+      const aud = audiverisParaCifra(par);
+      // só substitui se tiver pelo menos tantos acordes, letra claramente mais legível e quase sem palavras estranhas
+      const audMelhor = aud && conhecidasLongas(aud) >= 0.8 && (!r.chordpro || (contar(aud) >= contar(r.chordpro) && indiceQualidade(aud) > indiceQualidade(r.chordpro) * 1.3));
+      if (audMelhor) {
+        if (VERBOSO) console.log('Audiveris melhor:', m.id, m.nome, indiceQualidade(aud), '>', indiceQualidade(r.chordpro));
+        r = { ...separarCabecalho(aud), formato: 'imagem', duvidas: [] }; porAudiveris++;
+      }
     }
     const q = qualidade(r.chordpro);
     // a partitura é mesmo desta música? (o site às vezes aponta a partitura de outra) — o título aparece na letra
@@ -116,4 +130,4 @@ if (ANTES) {
 }
 await encerrarOcr();
 if (SALVAR) writeFileSync(ARQ, JSON.stringify(dados));
-console.log(`${outraMusica} partituras que não batem com o título (não usadas) · ${novas} cifras novas geradas de partitura · ${refeitas} cifras refeitas (PDF misturado com partitura) · ${semAcordes} partituras sem acordes · ${copiadas} partituras copiadas para o app`);
+console.log(`${porAudiveris} lidas pelo Audiveris · ${outraMusica} partituras que não batem com o título (não usadas) · ${novas} cifras novas geradas de partitura · ${refeitas} cifras refeitas (PDF misturado com partitura) · ${semAcordes} partituras sem acordes · ${copiadas} partituras copiadas para o app`);

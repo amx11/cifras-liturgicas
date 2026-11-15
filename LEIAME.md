@@ -85,6 +85,24 @@ pip install yt-dlp faster-whisper
 A transcrição usa a placa de vídeo NVIDIA quando disponível (modelo `small`; para mais precisão,
 defina `WHISPER_MODELO=medium`). O resultado é um rascunho: revise antes de salvar.
 
+## Leitura óptica de partitura (Audiveris, opcional)
+
+O Audiveris lê partituras em imagem (escaneadas) e exporta MusicXML. Ele roda no servidor do computador:
+o Importar pede a ele uma segunda leitura e fica com a melhor; o acervo também usa (`partituras-cifra.mjs`).
+Instalação sem administrador (WSL/Ubuntu), com Java embutido:
+
+```
+curl -LO https://github.com/Audiveris/audiveris/releases/download/5.11.0/Audiveris-5.11.0-ubuntu24.04-x86_64.deb
+mkdir -p ~/.local/audiveris/tessdata && dpkg-deb -x Audiveris-5.11.0-ubuntu24.04-x86_64.deb ~/.local/audiveris
+cd ~/.local/audiveris/tessdata && curl -LO https://github.com/tesseract-ocr/tessdata/raw/main/por.traineddata \
+  && curl -LO https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+```
+
+(Os idiomas precisam ser os do repositório `tessdata` completo: o Audiveris usa o motor legado do Tesseract.)
+
+Arquivos **MusicXML** (.mxl/.musicxml, exportados do MuseScore ou Finale) podem ser importados direto no app
+e viram cifra exata, sem leitura de imagem.
+
 ## Celular Android
 
 O app está publicado em **https://amx11.github.io/cifras-liturgicas/** (GitHub Pages, branch `gh-pages`).

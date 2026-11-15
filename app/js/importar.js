@@ -7,6 +7,44 @@ import { telaEditar } from './app.js';
 import { analisarAudio, montarChordPro } from './acordes-audio.js';
 
 const semExt = n => n.replace(/\.[^.]+$/, '');
+const ehMusicXml = arq => /\.(mxl|musicxml|xml)$/i.test(arq.name);
+
+// MusicXML (exportado do MuseScore/Finale/Audiveris): conversão exata, acorde na sílaba da nota
+async function textoMusicXml(dados, nome) {
+  if (/\.mxl$/i.test(nome) || (dados[0] === 0x50 && dados[1] === 0x4b)) {            // compactado (zip)
+    const { unzipSync, strFromU8 } = await import('../vendor/fflate.mjs');
+    const z = unzipSync(dados);
+    const raiz = z['META-INF/container.xml'] && /full-path="([^"]+)"/.exec(strFromU8(z['META-INF/container.xml']))?.[1];
+    const nomeXml = raiz && z[raiz] ? raiz : Object.keys(z).find(n => /\.(xml|musicxml)$/i.test(n) && !n.startsWith('META-INF'));
+    return nomeXml ? strFromU8(z[nomeXml]) : '';
+  }
+  return new TextDecoder().decode(dados);
+}
+export async function importarMusicXml(arq, out) {
+  try {
+    const xml = await textoMusicXml(new Uint8Array(await arq.arrayBuffer()), arq.name);
+    const { musicxmlParaChordPro } = await import('./musicxml.js');
+    const chordpro = musicxmlParaChordPro(xml);
+    if (!chordpro.trim()) { out.textContent = 'Não encontrei letra nem acordes neste MusicXML.'; return; }
+    const titulo = (/<work-title>([^<]*)<\/work-title>/.exec(xml) || /<movement-title>([^<]*)<\/movement-title>/.exec(xml) || [])[1] || semExt(arq.name);
+    telaEditar(null, { nome: titulo, chordpro, complemento: 'Convertida de MusicXML' });
+    aviso('Cifra montada a partir do MusicXML (exata): confira e salve', 3500);
+  } catch (err) { out.textContent = 'Não foi possível ler o MusicXML: ' + err.message; }
+}
+
+// Audiveris no servidor do computador (leitura óptica de partitura): devolve a cifra, ou null
+async function cifraPeloAudiveris(arq) {
+  try {
+    const st = await (await fetch(estado.prefs.servidor + '/api/status', { signal: AbortSignal.timeout(3000) })).json();
+    if (!st.audiveris) return null;
+    const ext = (arq.name.split('.').pop() || 'pdf').toLowerCase();
+    const r = await fetch(`${estado.prefs.servidor}/api/omr?ext=${encodeURIComponent(ext)}`, { method: 'POST', body: arq });
+    if (!r.ok) return null;
+    const xml = await textoMusicXml(new Uint8Array(await r.arrayBuffer()), 'x.mxl');
+    const { musicxmlParaChordPro } = await import('./musicxml.js');
+    return musicxmlParaChordPro(xml);
+  } catch { return null; }
+}
 
 // PDF de partitura (pentagrama do MuseScore/Finale): monta a cifra pela posição exata das notas.
 // Devolve null se o PDF não tiver pauta (aí vale o conversor de cifra em texto).
@@ -34,9 +72,20 @@ async function prepararVocabulario() {
 export async function lerEInserir(arquivos, out, base = {}) {
   const { lerCifra, ehImagem } = await import('./ocr.js');
   await prepararVocabulario();
-  const mostrar = t => { out.textContent = t; };
+  const mostrar = t => { if (out) out.textContent = t; };
   try {
-    const r = await lerCifra(arquivos, mostrar);
+    let r = await lerCifra(arquivos, mostrar);
+    if (r.partitura && arquivos.length === 1) {
+      mostrar('Pedindo uma segunda leitura ao Audiveris (servidor do computador)...');
+      const aud = await cifraPeloAudiveris(arquivos[0]);
+      const { vocabulario } = await import('./partitura.js');
+      const V = vocabulario() || new Set();
+      const conta = cp => (cp.match(/\[/g) || []).length;
+      const legiveis = cp => { const ws = cp.replace(/\[[^\]]*\]/g, '').split(/[\s\-–,.;:!?()"'“”_]+/).map(w => w.toLowerCase()).filter(w => /^[a-zà-ÿ]{4,}$/.test(w)); return ws.length >= 8 ? ws.filter(w => V.has(w)).length / ws.length : 0; };
+      if (aud && legiveis(aud) >= 0.8 && conta(aud) >= conta(r.chordpro) && legiveis(aud) > legiveis(r.chordpro) + 0.1) {
+        r = { ...r, chordpro: aud, duvidasResumo: ['cifra lida pelo Audiveris: confira letra e acordes com a partitura ao lado'] };
+      }
+    }
     if (!r.chordpro.trim()) { mostrar('Não encontrei texto nessa imagem. Tente uma foto mais nítida, de frente e com boa luz.'); return; }
     const foto = arquivos.every(ehImagem);
     const duvidas = r.legibilidade < 0.6
@@ -74,9 +123,10 @@ export function telaImportar(tela) {
       <div id="res-foto" class="pequeno" style="white-space:pre-wrap"></div>
     </div>
     <div class="cartao">
-      <h2 style="margin-top:0">PDF de cifra, letra ou partitura</h2>
-      <p class="pequeno suave">PDFs de texto (como os da arquidiocese) são convertidos na hora. <b>Partitura</b> (pentagrama com acordes) vira cifra com cada acorde na sílaba da sua nota. PDF escaneado (imagem) é lido automaticamente pelo reconhecimento de texto. Os acordes ficam no formato padrão, prontos para transpor.</p>
-      <label class="btn primario">Escolher PDF<input type="file" id="pdf" accept="application/pdf,.pdf" multiple hidden></label>
+      <h2 style="margin-top:0">PDF de cifra, letra ou partitura · MusicXML</h2>
+      <p class="pequeno suave">PDFs de texto (como os da arquidiocese) são convertidos na hora. <b>Partitura</b> (pentagrama com acordes) vira cifra com cada acorde na sílaba da sua nota. PDF escaneado (imagem) é lido automaticamente pelo reconhecimento de texto. Os acordes ficam no formato padrão, prontos para transpor.
+        <b>MusicXML</b> (.mxl/.musicxml, exportado do MuseScore ou Finale) vira cifra exata.</p>
+      <label class="btn primario">Escolher arquivo<input type="file" id="pdf" accept="application/pdf,.pdf,.mxl,.musicxml,.xml" multiple hidden></label>
       <div id="res-pdf" class="pequeno"></div>
     </div>
     <div class="cartao">
@@ -113,6 +163,7 @@ export function telaImportar(tela) {
     const arquivos = [...e.target.files];
     if (!arquivos.length) return;
     const out = $('#res-pdf');
+    if (arquivos.length === 1 && ehMusicXml(arquivos[0])) { await importarMusicXml(arquivos[0], out); return; }
     out.textContent = 'Lendo PDF...';
     try {
       const lib = await carregarPdfjs();

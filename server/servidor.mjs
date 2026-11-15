@@ -16,7 +16,9 @@ const SCRIPT_WHISPER = fileURLToPath(new URL('./transcrever.py', import.meta.url
 await mkdir(TEMP, { recursive: true });
 
 const tem = (cmd, args = ['--version']) => { try { return spawnSync(cmd, args, { stdio: 'ignore' }).status === 0; } catch { return false; } };
+const AUDIVERIS = join(process.env.HOME || '', '.local/audiveris/opt/audiveris/bin/Audiveris');
 const recursos = () => ({
+  audiveris: existsSync(AUDIVERIS),
   ytdlp: tem('yt-dlp') || tem(PY, ['-m', 'yt_dlp', '--version']),
   ffmpeg: tem('ffmpeg', ['-version']),
   whisper: tem(PY, ['-c', 'import faster_whisper']),
@@ -94,6 +96,25 @@ async function api(req, res, url) {
     return createReadStream(p).pipe(res);
   }
 
+  // Leitura óptica de partitura (Audiveris): recebe imagem/PDF da partitura, devolve o MusicXML
+  if (url.pathname === '/api/omr' && req.method === 'POST') {
+    if (!cache.audiveris) return json(res, 501, { erro: 'Audiveris não instalado' });
+    const partes = [];
+    let tamanho = 0;
+    for await (const c of req) { tamanho += c.length; if (tamanho > 60e6) return json(res, 413, { erro: 'arquivo grande demais' }); partes.push(c); }
+    const ext = (url.searchParams.get('ext') || 'pdf').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'pdf';
+    const nome = `omr-${Date.now()}`, dir = join(TEMP, nome);
+    await mkdir(dir, { recursive: true });
+    const arq = join(dir, `${nome}.${ext}`);
+    await writeFile(arq, Buffer.concat(partes));
+    await rodar(AUDIVERIS, ['-batch', '-export', '-output', dir, '-constant', 'org.audiveris.omr.text.Language.defaultSpecification=por', '--', arq],
+      { env: { ...process.env, TESSDATA_PREFIX: join(process.env.HOME || '', '.local/audiveris/tessdata') } }).catch(() => {});
+    const mxl = join(dir, `${nome}.mxl`);
+    if (!existsSync(mxl)) return json(res, 422, { erro: 'o Audiveris não reconheceu a partitura' });
+    res.writeHead(200, { 'Content-Type': 'application/vnd.recordare.musicxml' });
+    return createReadStream(mxl).pipe(res);
+  }
+
   if (url.pathname === '/api/correcao' && req.method === 'POST') {
     let corpo = '';
     for await (const c of req) { corpo += c; if (corpo.length > 2e6) return json(res, 413, { erro: 'grande demais' }); }
@@ -147,5 +168,5 @@ createServer(async (req, res) => {
   console.log(`Cifras Litúrgicas rodando em http://localhost:${PORTA}`);
   for (const lista of Object.values(networkInterfaces())) for (const i of lista || [])
     if (i.family === 'IPv4' && !i.internal) console.log(`  na rede local: http://${i.address}:${PORTA}`);
-  console.log(`  YouTube: ${cache.ytdlp ? 'ok' : 'falta yt-dlp (pip install yt-dlp)'} · Letra: ${cache.whisper ? 'ok' : 'falta faster-whisper (pip install faster-whisper)'}`);
+  console.log(`  YouTube: ${cache.ytdlp ? 'ok' : 'falta yt-dlp (pip install yt-dlp)'} · Letra: ${cache.whisper ? 'ok' : 'falta faster-whisper (pip install faster-whisper)'} · Partitura (Audiveris): ${cache.audiveris ? 'ok' : 'não instalado'}`);
 });
