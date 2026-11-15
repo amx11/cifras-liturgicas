@@ -7,7 +7,7 @@ import { ehAcorde, ehLinhaDeAcordes, itensParaChordPro } from './cifra.js';
 import { separarCabecalho } from './pdf.js';
 import { conferirComPartitura } from './conferir.js';
 
-const FONTE_MUSICA = /MScore|Leland|Bravura|Emmentaler|Petrucci|Maestro|Opus|Sonata|Finale|Jazz|Gonville|MuseJazz|Academico/i;
+const FONTE_MUSICA = /MScore|Leland|Bravura|Emmentaler|Petrucci|Maestro|Opus|Sonata|Finale|Jazz|Gonville|MuseJazz|Academico|Anastasia|Engraver|Broadway|Tamburo|Toccata|Kousa|Sebastian/i;
 const USO_PRIVADO = /[-]/;
 
 // larguras (em 1/1000 do corpo) por caractere, a partir da fonte embutida
@@ -179,7 +179,23 @@ function acordesDaLinha(itens, todos = false) {
   return todos ? lista : lista.filter(a => ehAcorde(a.str));
 }
 
+// Sem pentagrama detectável (pauta em imagem, fonte musical antiga, partitura lida por OCR):
+// cada linha de acordes vale para as linhas de letra logo abaixo dela (uma por estrofe)
+export function cifraDeLinhas(linhasTexto, hifens = []) {
+  const ehDeAcordes = l => { const g = acordesDaLinha(l.itens, true).filter(a => !/^\d+$/.test(a.str)); return g.length > 0 && g.filter(a => ehAcorde(a.str)).length >= g.length * 0.6; };
+  const temLetra = l => l.itens.some(i => /[a-zà-ÿ]{2,}/.test(i.str));
+  const estrofes = [];
+  let acordes = null, yAc = -Infinity, k = 0;
+  for (const l of [...linhasTexto].sort((a, b) => a.y - b.y)) {
+    if (ehDeAcordes(l)) { acordes = acordesDaLinha(l.itens); yAc = l.y; k = 0; continue; }
+    if (!acordes || !temLetra(l) || l.y - yAc > 110 || linhaDaPauta(l)) continue;
+    (estrofes[k++] ||= []).push({ l, acordes, hifens });
+  }
+  return estrofes.map(seq => montarEstrofe(seq)).filter(Boolean).join('\n\n');
+}
+
 function cifraDaPauta(linhasTexto, pautas, hifens) {
+  if (!pautas.length) return cifraDeLinhas(linhasTexto, hifens);
   // por estrofe (1ª linha de letra sob a pauta, 2ª linha...), a sequência de pautas
   const estrofes = [];
   pautas.forEach((f, ip) => {
@@ -257,8 +273,10 @@ function montarEstrofe(seq) {
     const pos = [];
     sil.forEach((s, i) => {
       const fim = s.x + s.w, prox = sil[i + 1];
-      const liga = /[-–]$/.test(s.str) || ligaVocab[i] || (prox ? hifenEntre(fim, prox.x) : hifens.some(h => ehHifen(h) && h.x0 >= fim - 1 && h.x0 < fim + 40));
-      const limpa = s.str.trim().replace(/[-–]+$/, '');
+      const textoHifen = prox ? (/^\s*[-–]/.test(prox.str) || l.itens.some(it => /^[-–]+$/.test(it.str.trim()) && it.x >= fim - 1 && it.x + it.w <= prox.x + 1))
+        : l.itens.some(it => /^[-–]+$/.test(it.str.trim()) && it.x >= fim - 1 && it.x < fim + 40);   // hífen no fim da linha
+      const liga = /[-–]\s*$/.test(s.str) || textoHifen || ligaVocab[i] || (prox ? hifenEntre(fim, prox.x) : hifens.some(h => ehHifen(h) && h.x0 >= fim - 1 && h.x0 < fim + 40));
+      const limpa = s.str.trim().replace(/^[-–]+\s*/, '').replace(/\s*[-–]+$/, '');
       pos.push({ ini: texto.length, c: s.x + s.w / 2, x: s.x });
       texto += limpa + (liga ? '' : ' ');
     });
@@ -299,7 +317,7 @@ function montarEstrofe(seq) {
     }
     let out = '', ate = 0;
     for (const mk of marcas.sort((a, b) => a.idx - b.idx || a.x - b.x)) { out += texto.slice(ate, mk.idx) + `[${mk.a}]`; ate = mk.idx; }
-    let linha = (out + texto.slice(ate)).replace(/([,;!?])(?=[A-Za-zÀ-ÿ\[])/g, '$1 '); // "Maria,aos" (elisão) -> "Maria, aos"
+    let linha = (out + texto.slice(ate)).replace(/_/g, ' ').replace(/([,;!?])(?=[A-Za-zÀ-ÿ\[])/g, '$1 ');   // elisão "_" e "Maria,aos" // "Maria,aos" (elisão) -> "Maria, aos"
     if (pendente) { linha = pendente + linha.replace(/^\s+/, ''); pendente = null; }
     // termina no meio da palavra: o pedaço vai para o começo da próxima linha
     if (!/\s$/.test(linha) && texto.length && pos.length) {
@@ -322,6 +340,14 @@ function cobre(pauta, bloco) {
   for (const w of B) if (P.get(w) > 0) { achou++; P.set(w, P.get(w) - 1); }
   const acP = (pauta.match(/\[/g) || []).length, acB = (bloco.match(/\[/g) || []).length;
   return achou / B.length >= 0.9 && acP >= acB * 0.8;
+}
+
+// Itens já com posição (ex.: OCR de partitura escaneada), página a página -> cifra pelo modo sem pentagrama
+export function cifraDeItens(itens, pautas = []) {
+  const paginas = [...new Set(itens.map(i => i.pagina))].sort((a, b) => a - b);
+  const corpo = paginas.map(p => cifraDaPauta(agruparLinhas(itens.filter(i => i.pagina === p)), pautas.filter(f => f.pagina === p), [])).filter(Boolean).join('\n\n');
+  const r = separarCabecalho(corpo);
+  return { ...r, formato: 'pauta-ocr', duvidas: [] };
 }
 
 // ---------- principal ----------
