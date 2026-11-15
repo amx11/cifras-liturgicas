@@ -1,7 +1,7 @@
 // Service worker: guarda o app e o acervo para funcionar sem internet
-const VERSAO = 'cl-v13';
+const VERSAO = 'cl-v14';
 const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/ui.js', 'js/dados.js', 'js/cifra.js', 'js/pdf.js',
-  'js/missas.js', 'js/importar.js', 'js/ouvir.js', 'js/tocar.js', 'js/painel.js', 'js/exportar.js', 'js/pdf-missa.js', 'js/visualizar-pdf.js', 'js/ocr.js', 'js/ocr-cifra.js', 'js/partitura.js', 'vendor/jspdf.umd.min.js', 'js/acordes-audio.js', 'manifest.webmanifest', 'icone.svg',
+  'js/missas.js', 'js/importar.js', 'js/ouvir.js', 'js/tocar.js', 'js/painel.js', 'js/exportar.js', 'js/pdf-missa.js', 'js/visualizar-pdf.js', 'js/ocr.js', 'js/ocr-cifra.js', 'js/partitura.js', 'js/partitura-imagem.js', 'js/conferir.js', 'vendor/jspdf.umd.min.js', 'js/acordes-audio.js', 'manifest.webmanifest', 'icone.svg',
   'icone-192.png', 'icone-512.png', 'data/musicas.json'];
 
 self.addEventListener('install', e => {

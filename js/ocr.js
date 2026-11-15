@@ -34,6 +34,27 @@ async function prepararLeitores() {
   return leitores;
 }
 
+// leitores da partitura em imagem: letra em texto esparso (só as sílabas) e acordes em bloco
+let leitoresPart = null;
+async function leitoresPartitura() {
+  if (!leitoresPart) {
+    const T = await carregarTesseract();
+    const op = { workerPath: BASE + 'worker.min.js', corePath: BASE + 'core/', langPath: BASE + 'lang', gzip: false, cacheMethod: 'none' };
+    const letra = await T.createWorker('por', 1, op);
+    await letra.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1' });
+    const acordes = await T.createWorker('eng', 1, op);
+    await acordes.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+    leitoresPart = { letra, acordes };
+  }
+  return async (cv, tipo) => {
+    const { data } = await leitoresPart[tipo === 'acordes' ? 'acordes' : 'letra'].recognize(cv, {}, { blocks: true, text: false });
+    const out = [];
+    for (const b of data.blocks || []) for (const p of b.paragraphs) for (const l of p.lines) for (const w of l.words)
+      if (w.text.trim()) out.push({ texto: w.text, conf: w.confidence, x0: w.bbox.x0, x1: w.bbox.x1, y0: w.bbox.y0, y1: w.bbox.y1, xs: w.symbols.map(s => s.bbox.x0), xe: w.symbols.map(s => s.bbox.x1) });
+    return out;
+  };
+}
+
 export async function encerrarOCR() {
   if (!leitores) return;
   const l = leitores; leitores = null;
@@ -106,6 +127,20 @@ export async function lerCifra(arquivos, progresso = () => {}) {
   for (const arq of arquivos) {
     if (ehImagem(arq)) paginas.push(await fotoParaCanvas(arq));
     else paginas.push(...await pdfParaCanvas(new Uint8Array(await arq.arrayBuffer())));
+  }
+  // partitura (tem pentagramas): acorde na sílaba da nota, pela leitura da partitura em imagem
+  const { acharPautas, lerPartituraImagem } = await import('./partitura-imagem.js');
+  const comPauta = paginas.filter(cv => acharPautas(cv.getContext('2d').getImageData(0, 0, cv.width, cv.height)).length >= 2).length;
+  if (comPauta >= Math.ceil(paginas.length / 2)) {
+    progresso('É uma partitura: lendo acordes e sílabas de cada pauta...');
+    const ler = await leitoresPartitura();
+    let feitas = 0;
+    const r = await lerPartituraImagem(paginas, async (cv, tipo) => { progresso(`Lendo a partitura... (${++feitas} trechos)`); return ler(cv, tipo); },
+      (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; });
+    const imagens = paginas.map(cv => cv.toDataURL('image/jpeg', 0.8));
+    const avisos = ['cifra lida da imagem da partitura: confira letra e acordes com a partitura ao lado'];
+    if (r.confianca < 70) avisos.unshift(`a imagem está pouco legível (confiança ${r.confianca}%): é provável haver erros`);
+    return { ...r, duvidas: avisos, duvidasResumo: avisos, locais: [], legibilidade: r.confianca / 100, imagens, partitura: true };
   }
   const { geral, acordes } = await prepararLeitores();
   const ocr = { paginas: [] };
