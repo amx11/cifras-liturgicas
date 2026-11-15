@@ -49,7 +49,7 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
         </div></div>` : ''}
       ${m.conferida && !m.daPartitura ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
       ${m.daPartitura && m.originalPdf ? `<div class="ocr-aviso nao-imprimir">
-          <span>${m.daPartitura.revisar ? '⚠ Cifra montada a partir da partitura, com pontos a conferir' : m.daPartitura.revisada ? '✓ Cifra montada a partir da partitura e revisada' : '🎼 Cifra montada a partir da partitura (acordes na sílaba da nota)'}.</span>
+          <span>${m.daPartitura.transcrita ? (m.daPartitura.sugeridos ? '⚠ A partitura não traz acordes: os acordes desta cifra são sugeridos' : '🎼 Cifra transcrita da partitura' + (m.daPartitura.duvidas?.length ? ` — confira: <b>${esc(m.daPartitura.duvidas.join('; '))}</b>` : '')) : m.daPartitura.revisar ? '⚠ Cifra montada a partir da partitura, com pontos a conferir' : m.daPartitura.revisada ? '✓ Cifra montada a partir da partitura e revisada' : '🎼 Cifra montada a partir da partitura (acordes na sílaba da nota)'}.</span>
           <button type="button" class="btn peq" data-ver-original>Ver original</button>
           ${m.origem === 'arquipoa' ? `<button type="button" class="btn peq${m.daPartitura.revisar ? ' primario' : ''}" data-revisar>Revisar</button>` : ''}
         </div><div class="original-escaneado" hidden></div>` : ''}
