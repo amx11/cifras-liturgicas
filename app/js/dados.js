@@ -53,6 +53,11 @@ export async function carregarAcervo() {
         daPartitura: m.daPartitura ? { ...m.daPartitura, revisar: false, revisada: c.data } : m.daPartitura, corrigida: c.data });
     return base;
   });
+  // Pasta de Cantos (versões simplificadas): agrupadas pelo título com as versões do acervo
+  try {
+    const r = await fetch('data/pasta.json', { cache: 'no-cache' });
+    if (r.ok) for (const m of (await r.json()).musicas) estado.base.push({ ...m, chave: 'p' + m.id, origem: 'pasta' });
+  } catch { /* opcional */ }
   migrarTons();
   montarIndice();
 }
@@ -112,8 +117,20 @@ function montarIndice() {
     return k;
   };
   const grupoDe = new Map(todas.filter(m => !m.base).map(m => [m.chave, chaveDe(m)]));
+  // Canto da Pasta de Cantos (sem número): entra no grupo do acervo de mesmo título; se o acervo separou o título
+  // em vários grupos (série com complementos), no maior deles
+  {
+    const tamanho = new Map();
+    for (const m of todas) if (m.origem === 'arquipoa') { const k = grupoDe.get(m.chave); tamanho.set(k, (tamanho.get(k) || 0) + 1); }
+    for (const m of todas) {
+      if (m.origem !== 'pasta') continue;
+      const k = chaveGrupo(m.nome);
+      const cands = [...tamanho.keys()].filter(g => g === k || g.startsWith(k + '|'));
+      if (cands.length) grupoDe.set(m.chave, cands.sort((a, b) => tamanho.get(b) - tamanho.get(a))[0]);
+    }
+  }
   for (const m of todas) {
-    m.grupo = (m.base && grupoDe.get(m.base)) || chaveDe(m);
+    m.grupo = (m.base && grupoDe.get(m.base)) || grupoDe.get(m.chave) || chaveDe(m);
     if (!estado.grupos.has(m.grupo)) estado.grupos.set(m.grupo, []);
     estado.grupos.get(m.grupo).push(m);
   }

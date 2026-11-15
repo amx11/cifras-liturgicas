@@ -137,6 +137,7 @@ function telaMusicas() {
       <select id="ano" aria-label="Ano litúrgico"><option value="">Todos os anos (A, B, C)</option>
         ${Object.entries(tx.anos).map(([k, v]) => `<option value="${k}" ${filtro.ano === +k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
         <option value="minha" ${filtro.origem === 'minha' ? 'selected' : ''}>Só as minhas músicas</option>
+        <option value="pasta" ${filtro.origem === 'pasta' ? 'selected' : ''}>Só a Pasta de Cantos (simplificadas)</option>
         <option value="revisar" ${filtro.revisar ? 'selected' : ''}>Convertidas automaticamente: para revisar</option>
         <option value="ocr" ${filtro.ocr ? 'selected' : ''}>Convertidas do escaneado: todas</option>
         <option value="partitura" ${filtro.partitura ? 'selected' : ''}>Montadas a partir da partitura</option></select>
@@ -183,7 +184,7 @@ function telaMusicas() {
   });
   tela.querySelector('#ano').onchange = e => {
     const v = e.target.value;
-    filtro.origem = v === 'minha' ? 'minha' : null;
+    filtro.origem = v === 'minha' || v === 'pasta' ? v : null;
     filtro.revisar = v === 'revisar'; filtro.ocr = v === 'ocr'; filtro.partitura = v === 'partitura';
     filtro.ano = /^\d+$/.test(v) ? +v : null;
     atualizar();
