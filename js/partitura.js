@@ -90,6 +90,9 @@ function linhaDaPauta(l) {
   return toks.length >= 2 && /^\d{1,3}$/.test(toks[0]) && toks.slice(1).every(t => /^([A-G]|m|\d+|sus|maj|dim|[+°ø]|\/)$/.test(t));
 }
 
+// distância máxima entre uma estrofe e a seguinte empilhadas sob a mesma pauta (461 usa 17 pt)
+const ENTRE_ESTROFES = 22;
+
 // Itens que pertencem às pautas: da linha de acordes acima da 1ª pauta até as estrofes logo abaixo da
 // última (a 1ª até 25 pt, cada seguinte até 16 pt da anterior). O bloco de cifra pronto fica fora dessa faixa.
 function zonasDaPauta(linhas, faixas) {
@@ -98,7 +101,7 @@ function zonasDaPauta(linhas, faixas) {
   const ini = Math.min(...faixas.map(f => f.ini)) - 22, fimPauta = Math.max(...faixas.map(f => f.fim));
   let fim = fimPauta + 2;
   for (const l of linhas.filter(l => l.y > fimPauta + 2).sort((a, b) => a.y - b.y)) {
-    if (l.y - fim > (fim === fimPauta + 2 ? 25 : 16)) break;
+    if (l.y - fim > (fim === fimPauta + 2 ? 25 : ENTRE_ESTROFES)) break;
     fim = l.y;
   }
   for (const l of linhas) if (l.y >= ini && l.y <= fim) l.itens.forEach(i => z.add(i));
@@ -214,7 +217,7 @@ function cifraDaPauta(linhasTexto, pautas, hifens) {
       .sort((a, b) => a.y - b.y);
     {                                             // só as estrofes coladas na pauta (mais longe é outro bloco de texto)
       const fica = [];
-      for (const l of abaixo) { const ant = fica.length ? fica[fica.length - 1].y : f.fim; if (l.y - ant > (fica.length ? 16 : 30)) break; fica.push(l); }
+      for (const l of abaixo) { const ant = fica.length ? fica[fica.length - 1].y : f.fim; if (l.y - ant > (fica.length ? ENTRE_ESTROFES : 30)) break; fica.push(l); }
       abaixo = fica;
     }
     abaixo.forEach((l, k) => { (estrofes[k] ||= []).push({ l, acordes, hifens }); });
