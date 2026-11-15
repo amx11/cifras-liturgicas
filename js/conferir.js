@@ -49,7 +49,9 @@ function alinhar(A, B) {
 const raiz = a => a.replace(/^\(/, '').replace(/\)$/, '');
 
 // Devolve { chordpro, movidos, comparados, semitons } — semitons: diferença de tom entre cifra e partitura
-export function conferirComPartitura(cifra, partitura) {
+// opcoes.nomes: corrige também o nome do acorde quando a diferença é só o acidente (# ou b perdido/inventado
+// pelo OCR: "Cm" x "C#m", "Ab7" x "A7"), na mesma palavra e com um único acorde em cada lado
+export function conferirComPartitura(cifra, partitura, opcoes = {}) {
   const C = analisar(cifra), P = analisar(partitura);
   const pares = alinhar(C.palavras, P.palavras);
   // tom: a transposição que faz mais acordes coincidirem nas palavras alinhadas
@@ -60,7 +62,20 @@ export function conferirComPartitura(cifra, partitura) {
     if (n > melhor.n) melhor = { t, n };
   }
   const igual = (a, b) => raiz(b.nome) === transporAcorde(raiz(a.nome), melhor.t) || raiz(b.nome) === raiz(a.nome);
-  let movidos = 0, comparados = 0;
+  let movidos = 0, comparados = 0, renomeados = 0;
+  if (opcoes.nomes) {
+    const semAcid = x => x.replace(/^([A-G])[#b]/, '$1').replace(/\/([A-G])[#b]/, '/$1').replace(/º|°|dim/, 'dim');
+    const volta = (12 - melhor.t) % 12;
+    for (const [i, j] of pares) {
+      const pc = C.palavras[i], pp = P.palavras[j];
+      if (pc.acordes.length !== 1 || pp.acordes.length !== 1) continue;
+      const a = pc.acordes[0], b = pp.acordes[0], na = raiz(a.nome), nb = raiz(b.nome);
+      if (na === '?') { a.nome = transporAcorde(nb, volta); renomeados++; continue; }   // ilegível: o da partitura
+      if (transporAcorde(na, melhor.t) === nb) continue;
+      const certo = transporAcorde(nb, volta, /b/.test(na.slice(1, 2)));
+      if (semAcid(certo) === semAcid(na) && certo !== na) { a.nome = a.nome.replace(na, certo); renomeados++; }
+    }
+  }
   const idxP = new Map(pares.map(([i, j]) => [i, j]));
   for (const [i, j] of pares) {
     const pc = C.palavras[i], pp = P.palavras[j];
@@ -95,5 +110,5 @@ export function conferirComPartitura(cifra, partitura) {
     for (const a of acs) { out += l.texto.slice(ate, a.pos) + `[${a.nome}]`; ate = Math.max(ate, a.pos); }
     return out + l.texto.slice(ate);
   }).join('\n');
-  return { chordpro, movidos, comparados, semitons: melhor.t, palavrasAlinhadas: pares.length, palavrasCifra: C.palavras.length };
+  return { chordpro, movidos, comparados, renomeados, semitons: melhor.t, palavrasAlinhadas: pares.length, palavrasCifra: C.palavras.length };
 }
