@@ -11,6 +11,7 @@ import { desenharPDF } from './visualizar-pdf.js';
 import { telaImportar } from './importar.js';
 import { telaTocar, sairTocar } from './tocar.js';
 import { telaOuvir, pararOuvir } from './ouvir.js';
+import { telaAfinador, pararAfinador } from './afinador.js';
 
 const tela = document.getElementById('tela');
 const TONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -498,6 +499,7 @@ const ROTAS = [
   [/^#\/tocar\/([^/]+)\/?(\d*)$/, (id, n) => telaTocar(tela, id, n), 'missas'],
   [/^#\/importar$/, () => telaImportar(tela), 'importar'],
   [/^#\/ouvir$/, () => telaOuvir(tela), 'ouvir'],
+  [/^#\/afinador$/, () => telaAfinador(tela), 'afinador'],
   [/^#\/ajustes$/, () => telaAjustes(), 'ajustes'],
 ];
 
@@ -507,6 +509,7 @@ function rotear() {
   cancelAnimationFrame(rolando);
   if (!h.startsWith('#/tocar/')) sairTocar();
   if (rotaAnterior.startsWith('#/ouvir') && !h.startsWith('#/ouvir')) pararOuvir();
+  if (rotaAnterior.startsWith('#/afinador') && !h.startsWith('#/afinador')) pararAfinador();
   for (const [re, fn, aba] of ROTAS) {
     const m = h.match(re);
     if (!m) continue;
