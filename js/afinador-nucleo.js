@@ -146,7 +146,7 @@ export function criarEstabilizador(n = 7) {
     adicionar(f) { hist.push(f); if (hist.length > n) hist.shift(); },
     limpar() { hist.length = 0; },
     valor() {
-      if (hist.length < 3) return null;
+      if (hist.length < 2) return null;
       const ord = [...hist].sort((a, b) => a - b), med = ord[Math.floor(ord.length / 2)];
       const perto = hist.filter(f => Math.abs(centsEntre(f, med)) < 8);
       const m = perto.reduce((s, f) => s + Math.log2(f), 0) / perto.length;

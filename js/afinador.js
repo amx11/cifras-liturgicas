@@ -7,7 +7,7 @@ let sessao = null;
 
 export function pararAfinador() {
   if (!sessao) return;
-  cancelAnimationFrame(sessao.quadro);
+  clearInterval(sessao.quadro);
   sessao.stream.getTracks().forEach(t => t.stop());
   sessao.ctx.close();
   sessao = null;
@@ -65,9 +65,10 @@ export function telaAfinador(tela) {
       const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 50; hp.Q.value = 0.5;
       const an = ctx.createAnalyser(); an.fftSize = 16384; an.smoothingTimeConstant = 0;
       fonte.connect(hp); hp.connect(an);
-      sessao = { stream, ctx, an, buf: new Float32Array(an.fftSize), est: criarEstabilizador(7), ultimo: 0, ultimaNota: null, visto: 0 };
+      sessao = { stream, ctx, an, buf: new Float32Array(an.fftSize), est: criarEstabilizador(5), ultimo: 0, ultimaNota: null, visto: 0 };
       $('#ligar').textContent = '■ Desligar';
-      laco();
+      // leitura a cada 35 ms (~28 por segundo) por relógio próprio: não depende da taxa de quadros da tela
+      sessao.quadro = setInterval(laco, 35);
     } catch (e) { aviso('Não foi possível usar o microfone: ' + e.message); }
   };
 
@@ -99,10 +100,7 @@ export function telaAfinador(tela) {
 
   function laco() {
     if (!sessao) return;
-    sessao.quadro = requestAnimationFrame(laco);
     const agora = performance.now();
-    if (agora - sessao.ultimo < 60) return;          // ~16 leituras por segundo
-    sessao.ultimo = agora;
     const { an, buf, ctx, est } = sessao;
     an.getFloatTimeDomainData(buf);
     const taxa = ctx.sampleRate;
@@ -125,10 +123,14 @@ export function telaAfinador(tela) {
     sessao.rmsAnt = rms;
     if (nova) { est.limpar(); sessao.ataque = agora; sessao.travado = false; sessao.pico = 0; sessao.suave = null; }
     sessao.pico = Math.max(sessao.pico, rms);
-    const f = refinarFundamental(nova ? buf.subarray(buf.length - 8192) : buf, taxa, r.freq);
+    // janela que cresce desde a palhetada: começa com ~0,13 s (resposta rápida, erro < 0,6 cent) e vai até 0,34 s
+    // (erro < 0,2 cent) enquanto a nota soa — sem misturar o som de antes da palhetada
+    const desde = Math.round((agora - sessao.ataque) / 1000 * taxa);
+    const tam = Math.max(6144, Math.min(buf.length, desde));
+    const f = refinarFundamental(buf.subarray(buf.length - tam), taxa, r.freq);
     sessao.f = f; sessao.visto = agora;
-    // logo após a palhetada a corda soa alguns cents mais alta: nos primeiros 0,35 s só mostra a nota, o ponteiro fica parado
-    if (agora - sessao.ataque < 350) { mostrar(f, 5, false); $('#estab').textContent = 'medindo…'; return; }
+    // logo após a palhetada a corda soa um pouco mais alta: nos primeiros 0,12 s só mostra a nota
+    if (agora - sessao.ataque < 120) { mostrar(f, 5, false); $('#estab').textContent = 'medindo…'; return; }
     // nota sumindo (volume < 15% do pico): o ruído passa a dominar → mantém a última leitura boa em vez de tremer
     if (rms < 0.15 * sessao.pico && sessao.suave != null) { $('#estab').textContent = 'leitura mantida (toque de novo)'; return; }
     // leitura pouco periódica (ruído, duas cordas soando) não entra na média
@@ -138,8 +140,8 @@ export function telaAfinador(tela) {
     // suavização adaptativa: variações pequenas (tremor) andam devagar; quando você gira a tarraxa (>4 cents) o ponteiro acompanha rápido
     const lg = Math.log2(v.freq);
     if (sessao.suave == null) sessao.suave = lg;
-    else sessao.suave += (Math.abs(1200 * (lg - sessao.suave)) > 4 ? 0.5 : 0.15) * (lg - sessao.suave);
+    else sessao.suave += (Math.abs(1200 * (lg - sessao.suave)) > 3 ? 0.8 : 0.35) * (lg - sessao.suave);
     mostrar(Math.pow(2, sessao.suave), v.desvioCents);
-    $('#estab').textContent = v && v.amostras >= 5 && v.desvioCents < 0.3 ? `estável (±${v.desvioCents.toFixed(2)} c)` : 'medindo…';
+    $('#estab').textContent = v && v.amostras >= 3 && v.desvioCents < 0.5 ? `estável (±${v.desvioCents.toFixed(2)} c)` : 'medindo…';
   }
 }
