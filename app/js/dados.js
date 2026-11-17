@@ -198,7 +198,6 @@ const SEPARAR = new Set([
   'a549',                  // Aleluia pascal com Salmo 117 (≠ "É preciso vigiar")
   'a167',                  // Eu sou o pão da vida (outra letra)
   'p900175',               // Glória parafraseado ("Glória, Glória, Aleluia")
-  'p900199',               // Kyrie "Como a ovelha perdida"
   'p900158',               // A barca II ("Tu te abeiraste da praia")
   'p900168', 'p900415', 'p900203',   // Santos com letra própria (não o texto do Missal)
   'p900452',               // "Todo teu" da Pasta que na verdade é outra canção
