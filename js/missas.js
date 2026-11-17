@@ -9,7 +9,7 @@ import { exportarMissa } from './exportar.js';
 const ROTEIRO = [
   ['Entrada', 4], ['Ato penitencial', 5], ['Glória', 1], ['Salmo responsorial', 6], ['Aclamação ao Evangelho', 3],
   ['Apresentação das oferendas', 10], ['Santo', 2], ['Cordeiro de Deus', 15], ['Comunhão', 16],
-  ['Ação de graças', 18], ['Final', 18],
+  ['Ação de graças', 18], ['Canto a Maria', 90], ['Final', 18],
 ];
 
 const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -151,8 +151,9 @@ function tomDoTexto(t) {
 }
 
 // parte da missa de cada canto do repertório: pelo texto do site (Entrada, Oferendas…) e, se não disser, pela classificação do canto
+const CANTO_MARIANO = /\b(maria|nossa senhora|virgem|ave|magnificat|salve,? rainha|mae de deus|imaculada|aparecida)\b/;
 const ROTULO_PARTE = { 4: 'Entrada', 5: 'Ato penitencial', 1: 'Glória', 6: 'Salmo responsorial', 3: 'Aclamação ao Evangelho',
-  10: 'Apresentação das oferendas', 2: 'Santo', 15: 'Cordeiro de Deus', 16: 'Comunhão', 18: 'Final', 19: 'Presidência e assembleia' };
+  10: 'Apresentação das oferendas', 2: 'Santo', 15: 'Cordeiro de Deus', 16: 'Comunhão', 90: 'Canto a Maria', 18: 'Outro canto', 19: 'Presidência e assembleia' };
 function parteDoCanto(texto, m) {
   const t = texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   if (/aclamacao memorial|memorial|todas as vezes|anunciamos/.test(t)) return ['Aclamação memorial', 19];
@@ -161,6 +162,7 @@ function parteDoCanto(texto, m) {
   if (/oferend|ofertorio/.test(t)) return ['Apresentação das oferendas', 10];
   if (/comunhao/.test(t)) return ['Comunhão', 16];
   if (/acao de gracas/.test(t)) return ['Ação de graças', 18];
+  if (CANTO_MARIANO.test(t) || m?.partes?.includes(90) && !/\b(final|envio)\b/.test(t)) return ['Canto a Maria', 90];
   if (/\b(final|envio)\b/.test(t)) return ['Final', 18];
   const p = m?.partes?.find(x => ROTULO_PARTE[x]);
   if (p) return [ROTULO_PARTE[p], p];
