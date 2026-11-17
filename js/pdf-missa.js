@@ -63,11 +63,12 @@ export function gerarPDF(JsPDF, missa, opcoes = {}) {
     if (c.imagens?.length) { cantoImagem(c, n); return; }
     let linhas = c.linhas.filter(l => acordes || l.tipo !== 'acordes');
     while (linhas.length && linhas.at(-1).tipo === 'vazia') linhas.pop();
-    const maxCol = Math.max(10, ...linhas.map(l => limpar(l.texto).length));
+    const ESC_REFRAO = 1.15;   // refrão com letra 15% maior
+    const maxCol = Math.max(10, ...linhas.map(l => limpar(l.texto).length * (l.refrao ? ESC_REFRAO : 1)));
     const maxTam = grande ? 12.5 : 10.5;
     const tam = Math.max(6.5, Math.min(maxTam, largUtil / (maxCol * 0.6 * MM_POR_PT)));
     const alt = tam * MM_POR_PT * 1.3;
-    const alturaCorpo = linhas.reduce((h, l) => h + (l.tipo === 'vazia' ? alt * 0.55 : alt), 0);
+    const alturaCorpo = linhas.reduce((h, l) => h + (l.tipo === 'vazia' ? alt * 0.55 : l.refrao ? alt * ESC_REFRAO : alt), 0);
     const alturaTitulo = 16;
     const util = limite - PAG.topo;
 
@@ -94,12 +95,14 @@ export function gerarPDF(JsPDF, missa, opcoes = {}) {
 
     for (const l of linhas) {
       if (l.tipo === 'vazia') { y += alt * 0.55; continue; }
-      garantir(alt + 1);
-      if (l.tipo === 'acordes') fonte('courier', 'bold', tam, cor.acorde);
-      else if (l.tipo === 'comentario') fonte('courier', 'italic', tam, cor.suave);
-      else fonte('courier', l.refrao ? 'bold' : 'normal', tam);
-      doc.text(limpar(l.texto), PAG.esq, y + tam * MM_POR_PT * 0.85);
-      y += alt;
+      const t = l.refrao ? tam * ESC_REFRAO : tam, a = l.refrao ? alt * ESC_REFRAO : alt;
+      garantir(a + 1);
+      // refrão: letra em negrito e maior; a linha de acordes dele no mesmo tamanho, para os acordes ficarem sobre a sílaba certa
+      if (l.tipo === 'acordes') fonte('courier', 'bold', t, cor.acorde);
+      else if (l.tipo === 'comentario') fonte('courier', 'italic', t, cor.suave);
+      else fonte('courier', l.refrao ? 'bold' : 'normal', t);
+      doc.text(limpar(l.texto), PAG.esq, y + t * MM_POR_PT * 0.85);
+      y += a;
     }
     y += 7;
   });

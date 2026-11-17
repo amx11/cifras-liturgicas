@@ -633,7 +633,7 @@ export function linhasCifra(chordpro, { semitons = 0, bemol = false, mostrarAcor
       }
       baixo += s.texto;
     }
-    if (mostrarAcordes && cima.trim()) out.push({ tipo: 'acordes', texto: cima.replace(/\s+$/, '') });
+    if (mostrarAcordes && cima.trim()) out.push({ tipo: 'acordes', texto: cima.replace(/\s+$/, ''), refrao: !!l.refrao });
     out.push({ tipo: 'letra', texto: baixo.replace(/\s+$/, ''), refrao: !!l.refrao });
   }
   return out;
