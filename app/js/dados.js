@@ -1,5 +1,6 @@
 // Acervo (arquidiocese + músicas próprias) e dados salvos no aparelho
 import { normalizar, detectarTom, transporTom, semitonsEntre } from './cifra.js';
+import { revisarClassificacao } from './classificar.js';
 
 const CHAVES = { prefs: 'cl.prefs', minhas: 'cl.minhas', edicoes: 'cl.edicoes', tons: 'cl.tons', missas: 'cl.missas' };
 
@@ -156,6 +157,7 @@ function montarIndice() {
     estado.grupos.get(m.grupo).push(m);
   }
   for (const vs of estado.grupos.values()) vs.forEach((m, i) => { m.versao = i + 1; m.totalVersoes = vs.length; });
+  estado.revisaoClassificacao = revisarClassificacao([...estado.grupos.values()]);
   // Numeração do app (como num cancioneiro): um número por música (título), em ordem alfabética; as versões
   // compartilham o número. As músicas só suas ficam no fim, para não mudar a numeração do acervo.
   let num = 0;

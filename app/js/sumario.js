@@ -11,7 +11,7 @@ export function telaSumario(tela) {
     return { num: principal.num, nome: principal.nome, chave: principal.chave, versoes: vs.length, tempos, partes };
   }).sort((a, b) => a.num - b.num);
   const secoes = [...ORDEM_TEMPOS.filter(t => estado.taxonomia.tempos[t]).map(t => ({ id: 't' + t, titulo: nomeTempo(t), cor: COR_TEMPO[t], itens: entradas.filter(e => e.tempos.has(t)) })),
-    { id: 'sem', titulo: 'Sem tempo definido', cor: 'var(--suave, #888)', itens: entradas.filter(e => !e.tempos.size) }].filter(s => s.itens.length);
+    { id: 'sem', titulo: 'Uso geral (sem tempo próprio)', cor: 'var(--suave, #888)', itens: entradas.filter(e => !e.tempos.size) }].filter(s => s.itens.length);
   const linha = e => `<a class="sum-item" href="#/musica/${esc(e.chave)}"><span class="num">${e.num}</span><span class="sum-nome">${esc(e.nome)}</span>${e.versoes > 1 ? `<span class="pequeno suave">${e.versoes} versões</span>` : ''}</a>`;
   const porParte = itens => {
     const blocos = [];
