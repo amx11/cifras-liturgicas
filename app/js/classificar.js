@@ -32,6 +32,8 @@ const CONFIRMA = {
   5: /piedade|eleison|tende compaixao/,
 };
 
+const MARIANO = /\b(maria|nossa senhora|virgem|ave|magnificat|salve,? rainha|mae de deus|mae (do|da|dos|fiel|peregrina|de)|imaculada|aparecida|senhora (da|do|de)|rainha do ceu)\b/;
+
 export function revisarClassificacao(grupos) {
   const resumo = { herdadas: 0, peloTitulo: 0, ordinario: 0, removidos: 0 };
   for (const vs of grupos) {
@@ -55,6 +57,8 @@ export function revisarClassificacao(grupos) {
       const r = PELO_TITULO.find(([p, re]) => re.test(titulo) && (!CONFIRMA[p] || CONFIRMA[p].test(letra)));
       if (r) { m.partes = [r[0]]; m.classificacaoInferida = true; resumo.peloTitulo++; }
     }
+    // Canto a Maria (antes do canto final): todo canto mariano, além da parte que já tiver
+    if (MARIANO.test(titulo) && !(m.partes || []).includes(90)) m.partes = [...(m.partes || []), 90];
     const partes = m.partes || [];
     // 3) ordinário da missa: o texto é sempre o mesmo, então serve a todos os tempos permitidos
     const ehGloria = partes.includes(1) && /gloria/.test(titulo) && !/gloria a vos|gloria e louvor|louvor e gloria|gloria a cristo/.test(titulo);
