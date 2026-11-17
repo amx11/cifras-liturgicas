@@ -21,7 +21,7 @@ export function gerarPDF(JsPDF, missa, opcoes = {}) {
   const largUtil = PAG.l - PAG.esq - PAG.dir;
   const limite = PAG.a - PAG.base - 6; // deixa espaço para o rodapé
   let y = PAG.topo;
-  const cor = { texto: [25, 25, 25], suave: [110, 110, 110], acorde: [165, 55, 20], linha: [200, 200, 200], verde: [47, 93, 80] };
+  const cor = { texto: [25, 25, 25], suave: [110, 110, 110], acorde: [165, 55, 20], refrao: [200, 16, 46], linha: [200, 200, 200], verde: [47, 93, 80] };
   const fonte = (nome, estilo, tam, c = cor.texto) => { doc.setFont(nome, estilo); doc.setFontSize(tam); doc.setTextColor(...c); };
 
   const novaPagina = () => { doc.addPage(); y = PAG.topo; };
@@ -100,7 +100,8 @@ export function gerarPDF(JsPDF, missa, opcoes = {}) {
       // refrão: letra em negrito e maior; a linha de acordes dele no mesmo tamanho, para os acordes ficarem sobre a sílaba certa
       if (l.tipo === 'acordes') fonte('courier', 'bold', t, cor.acorde);
       else if (l.tipo === 'comentario') fonte('courier', 'italic', t, cor.suave);
-      else fonte('courier', l.refrao ? 'bold' : 'normal', t);
+      else if (l.refrao) fonte('courier', 'bold', t, cor.refrao);
+      else fonte('courier', 'normal', t);
       doc.text(limpar(l.texto), PAG.esq, y + t * MM_POR_PT * 0.85);
       y += a;
     }

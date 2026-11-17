@@ -7,6 +7,7 @@
   --primaria: #2f5d50;
   --primaria-texto: #ffffff;
   --acorde: #b3401a;
+  --refrao: #c8102e;
   --realce: #fff3cd;
   --perigo: #a4262c;
   --raio: 12px;
@@ -23,13 +24,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema="claro"]) {
     --fundo: #141816; --cartao: #1e2421; --texto: #e8ebe9; --suave: #9aa39e; --linha: #2e3632;
-    --primaria: #6fb59e; --primaria-texto: #0d1411; --acorde: #ff9a6b; --realce: #3a3320; --perigo: #ff7b7b;
+    --primaria: #6fb59e; --primaria-texto: #0d1411; --acorde: #ff9a6b; --refrao: #ff6b78; --realce: #3a3320; --perigo: #ff7b7b;
     color-scheme: dark;
   }
 }
 :root[data-tema="escuro"] {
   --fundo: #141816; --cartao: #1e2421; --texto: #e8ebe9; --suave: #9aa39e; --linha: #2e3632;
-  --primaria: #6fb59e; --primaria-texto: #0d1411; --acorde: #ff9a6b; --realce: #3a3320; --perigo: #ff7b7b;
+  --primaria: #6fb59e; --primaria-texto: #0d1411; --acorde: #ff9a6b; --refrao: #ff6b78; --realce: #3a3320; --perigo: #ff7b7b;
   color-scheme: dark;
 }
 
@@ -131,7 +132,7 @@ label.campo > span { display: block; font-size: 13px; color: var(--suave); margi
 .cifra .seg .ac { color: var(--acorde); font-weight: 700; font-size: .9em; padding-right: .35em; line-height: 1.25; }
 .cifra .so-acordes { color: var(--acorde); font-weight: 700; gap: .8em; }
 .cifra .comentario { font-style: italic; color: var(--suave); }
-.cifra .refrao .tx { font-weight: 700; font-size: 1.15em; }
+.cifra .refrao .tx { font-weight: 700; font-size: 1.15em; color: var(--refrao); }
 .cifra.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 
 .missa-slot { display: flex; gap: 10px; align-items: center; }
