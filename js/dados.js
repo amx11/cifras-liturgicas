@@ -133,8 +133,31 @@ function montarIndice() {
   // Mesmo título e mesmo número com complementos diferentes = peças distintas de uma série (ex.: Antífonas do Ó)
   const serie = new Map();
   for (const m of todas) if (m.numero != null && !m.base) { const k = chaveGrupo(m.nome) + '#' + m.numero; serie.set(k, (serie.get(k) || 0) + 1); }
+  // Salmo: cada refrão é um canto (o mesmo salmo tem refrões diferentes conforme o domingo). Chave = começo do refrão
+  // (complemento); refrões em que um é o começo do outro ("Bendirei eternamente" / "... vosso nome") ficam juntos.
+  const refraoSalmo = new Map();
+  {
+    const porSalmo = new Map();
+    for (const m of todas) {
+      const k = chaveGrupo(m.nome);
+      if (!/^salmo \d+/.test(k) || m.base) continue;
+      const r = normalizar(m.complemento || m.chordpro?.split('\n')[0] || '').split(' ').filter(Boolean).slice(0, 3).join(' ');
+      if (!porSalmo.has(k)) porSalmo.set(k, []);
+      porSalmo.get(k).push([m.chave, r]);
+    }
+    for (const lista of porSalmo.values()) {
+      const canon = [];
+      for (const [chave, r] of [...lista].sort((a, b) => a[1].length - b[1].length)) {
+        const c = canon.find(x => r && (r.startsWith(x) || x.startsWith(r)));
+        if (!c) canon.push(r);
+        refraoSalmo.set(chave, c ?? r);
+      }
+    }
+  }
   const chaveDe = m => {
     let k = chaveGrupo(m.nome);
+    if (SEPARAR.has(m.chave)) return k + '|' + m.chave;
+    if (refraoSalmo.has(m.chave)) return k + '|' + refraoSalmo.get(m.chave);
     if (TITULOS_GENERICOS.test(k) || (m.numero != null && serie.get(k + '#' + m.numero) > 1)) k += '|' + normalizar(m.complemento || '');
     return k;
   };
@@ -145,7 +168,7 @@ function montarIndice() {
     const tamanho = new Map();
     for (const m of todas) if (m.origem === 'arquipoa') { const k = grupoDe.get(m.chave); tamanho.set(k, (tamanho.get(k) || 0) + 1); }
     for (const m of todas) {
-      if (m.origem !== 'pasta' && m.origem !== 'adicionada') continue;
+      if ((m.origem !== 'pasta' && m.origem !== 'adicionada') || SEPARAR.has(m.chave)) continue;
       const k = chaveGrupo(m.nome);
       const cands = [...tamanho.keys()].filter(g => g === k || g.startsWith(k + '|'));
       if (cands.length) grupoDe.set(m.chave, cands.sort((a, b) => tamanho.get(b) - tamanho.get(a))[0]);
@@ -169,6 +192,17 @@ function montarIndice() {
 }
 
 // Títulos que sozinhos não identificam a música (o complemento diz qual é)
+// Mesmo título mas texto diferente (conferido letra a letra): cada um fica como música própria, não como versão
+const SEPARAR = new Set([
+  'a481', 'a33', 'a144',   // Aclamação memorial: "Salvador do mundo", "Toda vez que comemos", "Todas as vezes" (≠ "Anunciamos")
+  'a549',                  // Aleluia pascal com Salmo 117 (≠ "É preciso vigiar")
+  'a167',                  // Eu sou o pão da vida (outra letra)
+  'p900175',               // Glória parafraseado ("Glória, Glória, Aleluia")
+  'p900199',               // Kyrie "Como a ovelha perdida"
+  'p900158',               // A barca II ("Tu te abeiraste da praia")
+  'p900168', 'p900415', 'p900203',   // Santos com letra própria (não o texto do Missal)
+  'p900452',               // "Todo teu" da Pasta que na verdade é outra canção
+]);
 const TITULOS_GENERICOS = /^(salmo|cantico|canto|hino|antifona|aclamacao|refrao)$/;
 
 // Chave do grupo de versões: o título sem observações entre parênteses/colchetes, sem acentos e sem "versão N"
