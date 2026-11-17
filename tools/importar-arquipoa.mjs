@@ -192,7 +192,8 @@ async function main() {
 
 // "10. Das alturas orvalhem os céus - Entrada 4D Adv." -> numero, nome e complemento
 function separarNumero(titulo) {
-  const m = titulo.match(/^(\d+[a-zA-Z]?)[.)]\s*(.*)$/);
+  // "10. Título", "812 - Título", "922/638. Título" (mais de um número: o primeiro)
+  const m = titulo.match(/^(\d+[a-zA-Z]?)(?:\/\d+)*\s*(?:[.)]|\s[-–])\s*(.*)$/);
   const resto = m ? m[2] : titulo;
   const [nome, ...comp] = resto.split(/\s+[-–]\s+/);
   return { numero: m ? (/^\d+$/.test(m[1]) ? Number(m[1]) : m[1]) : null, nome: nome.trim(), complemento: comp.join(' - ').trim() };

@@ -156,6 +156,12 @@ function montarIndice() {
     estado.grupos.get(m.grupo).push(m);
   }
   for (const vs of estado.grupos.values()) vs.forEach((m, i) => { m.versao = i + 1; m.totalVersoes = vs.length; });
+  // Numeração do app (como num cancioneiro): um número por música (título), em ordem alfabética; as versões
+  // compartilham o número. As músicas só suas ficam no fim, para não mudar a numeração do acervo.
+  let num = 0;
+  const grupos = [...estado.grupos.values()];
+  for (const vs of grupos) if (vs.some(m => m.origem !== 'minha')) { num++; vs.forEach(m => { m.num = num; }); }
+  for (const vs of grupos) if (!vs[0].num) { num++; vs.forEach(m => { m.num = num; }); }
   estado.musicas = todas;
   estado.porChave = new Map(todas.map(m => [m.chave, m]));
 }
@@ -242,7 +248,13 @@ export function excluirMinha(chave) {
 export function buscar({ termo = '', tempo = null, parte = null, ano = null, origem = null, agrupar = false } = {}) {
   const palavras = normalizar(termo).split(' ').filter(Boolean);
   const res = [];
+  // só um número: a música com esse número no app (ou no livro da arquidiocese)
+  const numero = /^\s*(n[ºo°]?\s*)?\d+\s*$/i.test(termo) ? +termo.replace(/\D/g, '') : null;
   for (const m of estado.musicas) {
+    if (numero !== null) {
+      if (m.num === numero || +m.numero === numero) res.push({ m, peso: m.num === numero ? 0 : 1 });
+      continue;
+    }
     if (tempo !== null && !m.tempos?.includes(tempo)) continue;
     if (parte !== null && !m.partes?.includes(parte)) continue;
     if (ano !== null && !m.anos?.includes(ano)) continue;
