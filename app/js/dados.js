@@ -156,6 +156,8 @@ function montarIndice() {
   }
   const chaveDe = m => {
     let k = chaveGrupo(m.nome);
+    const missal = textoDoMissal(m);
+    if (missal) return 'ordinario|' + missal;
     if (SEPARAR.has(m.chave)) return k + '|' + m.chave;
     if (refraoSalmo.has(m.chave)) return k + '|' + refraoSalmo.get(m.chave);
     if (TITULOS_GENERICOS.test(k) || (m.numero != null && serie.get(k + '#' + m.numero) > 1)) k += '|' + normalizar(m.complemento || '');
@@ -168,7 +170,7 @@ function montarIndice() {
     const tamanho = new Map();
     for (const m of todas) if (m.origem === 'arquipoa') { const k = grupoDe.get(m.chave); tamanho.set(k, (tamanho.get(k) || 0) + 1); }
     for (const m of todas) {
-      if ((m.origem !== 'pasta' && m.origem !== 'adicionada') || SEPARAR.has(m.chave)) continue;
+      if ((m.origem !== 'pasta' && m.origem !== 'adicionada') || SEPARAR.has(m.chave) || textoDoMissal(m)) continue;
       const k = chaveGrupo(m.nome);
       const cands = [...tamanho.keys()].filter(g => g === k || g.startsWith(k + '|'));
       if (cands.length) grupoDe.set(m.chave, cands.sort((a, b) => tamanho.get(b) - tamanho.get(a))[0]);
@@ -192,6 +194,29 @@ function montarIndice() {
 }
 
 // Títulos que sozinhos não identificam a música (o complemento diz qual é)
+// Ordinário com o texto do Missal (Glória, Santo, Cordeiro): é UMA música por texto, e cada compositor/melodia
+// é uma versão dela, qualquer que seja o título ("Santo", "Santo, Santo, Santo", "Cordeiro de Deus - Pe. Sala"...).
+// Os de letra própria (paráfrases) não passam no teste e ficam como músicas separadas.
+const TEXTO_MISSAL = {
+  gloria: [/gloria a deus nas alturas/, /vos louvamos/, /(cordeiro de deus|unigenito)/],
+  santo: [/deus do universo/, /(ceu|ceus) e (a )?terra (proclamam|proclama)/, /hosana/],
+  cordeiro: [/cordeiro de deus/, /tirais o pecado do mu/, /paz/],
+};
+// texto do Missal com a letra estragada pela conversão (OCR), conferido à mão
+const MISSAL_CONFERIDO = { a664: 'santo', a39: 'santo' };
+function textoDoMissal(m) {
+  if (m.base || !m.chordpro) return null;
+  if (MISSAL_CONFERIDO[m.chave]) return MISSAL_CONFERIDO[m.chave];
+  const titulo = normalizar(m.nome);
+  // sem rótulos de linha ("S.:", "T:") e sem os hífens de melisma ("mun-un-do", "altu--ras")
+  const t = normalizar(m.chordpro.replace(/\[[^\]]*\]/g, '').replace(/^\s*intro.*$/gim, '').replace(/^\s*[A-Za-z]{1,4}\.?:\s*/gm, '').replace(/-+\s*/g, ''));
+  for (const [nome, testes] of Object.entries(TEXTO_MISSAL)) {
+    if (!(nome === 'gloria' ? /gloria/.test(titulo) : titulo.startsWith(nome))) continue;
+    if (testes.every(re => re.test(t))) return nome;
+  }
+  return null;
+}
+
 // Mesmo título mas texto diferente (conferido letra a letra): cada um fica como música própria, não como versão
 const SEPARAR = new Set([
   'a481', 'a33', 'a144',   // Aclamação memorial: "Salvador do mundo", "Toda vez que comemos", "Todas as vezes" (≠ "Anunciamos")
@@ -215,7 +240,8 @@ export function versoes(m) { return estado.grupos?.get(m.grupo) || [m]; }
 // Rótulo curto que diferencia as versões: complemento, autor ou primeira linha de acordes
 export function rotuloVersao(m) {
   const acordes = (m.chordpro || '').match(/\[([^\]]+)\]/g)?.slice(0, 4).map(a => a.slice(1, -1)).join(' ');
-  const desc = m.complemento || m.cabecalho?.find(l => /letra|m[úu]sica|autor|melodia/i.test(l)) || '';
+  const desc = m.complemento || m.cabecalho?.find(l => /letra|m[úu]sica|autor|melodia/i.test(l))
+    || (m.nome !== versoes(m)[0]?.nome ? m.nome : '');   // título próprio da versão ("Cordeiro de Deus VII")
   if (m.personalizada) {
     const dia = m.criada ? new Date(m.criada).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
     return { titulo: `Personalizada${dia ? ' · ' + dia : ''}`, desc: desc === 'Versão personalizada' ? '' : desc, acordes: acordes || '' };
