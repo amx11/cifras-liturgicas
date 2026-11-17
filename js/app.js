@@ -12,6 +12,7 @@ import { telaImportar } from './importar.js';
 import { telaTocar, sairTocar } from './tocar.js';
 import { telaOuvir, pararOuvir } from './ouvir.js';
 import { telaAfinador, pararAfinador } from './afinador.js';
+import { telaSumario } from './sumario.js';
 
 const tela = document.getElementById('tela');
 const TONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -200,7 +201,7 @@ function telaMusica(chave) {
   const partes = (m.partes || []).map(nomeParte).filter(Boolean).join(' · ');
   tela.innerHTML = `
     <div class="cifra-topo">
-      <div><h1>${m.numero ? m.numero + '. ' : ''}${esc(m.nome)}</h1>
+      <div><h1>${m.num ? `<span class="num">${m.num}</span> ` : ''}${esc(m.nome)}</h1>
         ${m.complemento ? `<div class="suave">${esc(m.complemento)}</div>` : ''}
         <div class="pequeno suave">${esc((m.tempos || []).map(nomeTempo).join(' · '))}${partes ? ' — ' + esc(partes) : ''}</div></div>
     </div>
@@ -500,6 +501,7 @@ const ROTAS = [
   [/^#\/importar$/, () => telaImportar(tela), 'importar'],
   [/^#\/ouvir$/, () => telaOuvir(tela), 'ouvir'],
   [/^#\/afinador$/, () => telaAfinador(tela), 'afinador'],
+  [/^#\/sumario$/, () => telaSumario(tela), 'sumario'],
   [/^#\/ajustes$/, () => telaAjustes(), 'ajustes'],
 ];
 

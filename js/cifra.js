@@ -158,6 +158,21 @@ function marcarRefroes(linhas) {
   }
 }
 
+// Toda estrofe numerada e todo refrão ("R.") começam um bloco separado: se vierem colados na linha anterior,
+// entra uma linha em branco (antes da linha de acordes que os acompanha, quando houver)
+function separarEstrofes(linhas) {
+  for (let i = linhas.length - 1; i > 0; i--) {
+    const l = linhas[i];
+    if (l.tipo !== 'letra') continue;
+    const t = textoDaLinha(l);
+    if (!NUMERO_ESTROFE.test(t) && !MARCA_REFRAO.test(t)) continue;
+    let ini = i;
+    if (linhas[i - 1].tipo === 'acordes') ini = i - 1;
+    const ant = linhas[ini - 1];
+    if (ant && (ant.tipo === 'letra' || ant.tipo === 'acordes')) linhas.splice(ini, 0, { tipo: 'vazia' });
+  }
+}
+
 export function parseChordPro(texto) {
   const meta = {};
   const linhas = [];
@@ -176,6 +191,7 @@ export function parseChordPro(texto) {
     const temTexto = segs.some(s => s.texto.trim());
     linhas.push({ tipo: temTexto ? 'letra' : 'acordes', segs });
   }
+  separarEstrofes(linhas);
   marcarRefroes(linhas);
   return { meta, linhas };
 }

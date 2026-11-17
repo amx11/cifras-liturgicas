@@ -53,7 +53,7 @@ export function itemMusica(m, { href = `#/musica/${m.chave}`, tom, extra = '', m
   const t = tom ?? estado.tons[m.chave] ?? m.tom;
   return `<a class="item" href="${href}" data-chave="${esc(m.chave)}">
     <span class="tom">${esc(t || '—')}</span>
-    <span class="info"><span class="nome">${m.numero ? m.numero + '. ' : ''}${esc(m.nome)}</span>
+    <span class="info"><span class="nome">${m.num ? `<span class="num">${m.num}</span> ` : ''}${esc(m.nome)}</span>
       ${m.complemento ? `<div class="comp">${esc(m.complemento)}</div>` : ''}
       <div class="selos">${selosTempos(m)}${m.origem === 'minha' ? '<span class="selo">minha</span>' : ''}${m.origem === 'pasta' ? '<span class="selo" title="Pasta de Cantos — versão simplificada">simplificada</span>' : ''}${m.origem === 'adicionada' ? `<span class="selo" title="${esc(m.complemento || '')}">adicionada</span>` : ''}${mostrarVersoes && m.totalVersoes > 1 ? `<span class="selo versoes">${m.totalVersoes} versões</span>` : ''}${m.ocr ? (m.ocr.revisar ? '<span class="selo revisar" title="Convertida do PDF escaneado; há acordes a conferir">revisar</span>' : `<span class="selo" title="Convertida do PDF escaneado">${m.ocr.revisada ? 'revisada' : 'OCR'}</span>`) : ''}${m.daPartitura ? (m.daPartitura.revisar ? '<span class="selo revisar" title="Montada a partir da partitura; há pontos a conferir">revisar</span>' : '<span class="selo" title="Cifra montada a partir da partitura">da partitura</span>') : ''}${!m.chordpro ? (m.pdfImagem ? '<span class="selo" title="Cifra em imagem (PDF escaneado): não transpõe">escaneada</span>' : '<span class="selo">sem cifra</span>') : !m.temCifra ? '<span class="selo">só letra</span>' : ''}</div>
     </span>${extra}</a>`;

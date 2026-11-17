@@ -28,7 +28,7 @@ export function dadosDaMissa(x, { acordes = true } = {}) {
     const tom = it.tom || estado.tons[m.chave] || m.tom || '';
     const semitons = m.tom && tom ? semitonsEntre(m.tom, tom) : 0;
     cantos.push({
-      rotulo: it.rotulo || 'Canto', nome: m.nome, tom,
+      rotulo: it.rotulo || 'Canto', nome: (m.num ? m.num + '. ' : '') + m.nome, tom,
       complemento: m.personalizada ? 'Versão personalizada' : (m.complemento || ''), pdfImagem: !m.chordpro ? m.pdfImagem : null,
       linhas: linhasCifra(m.chordpro || '', { semitons, bemol: tom ? preferirBemol(tom) : false, mostrarAcordes: acordes }),
     });
