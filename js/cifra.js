@@ -560,6 +560,10 @@ function esc(s) {
   return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// Linha só de rótulo + acordes ("Intro: [Dm7] [C/D]", "Final: [G] (2x)"): os acordes vão na mesma linha do rótulo
+const ROTULO_ACORDES = /^\s*(intro(du[çc][ãa]o)?|final|solo|interl[úu]dio|ponte|riff|base|passagem|vinheta|refr[ãa]o instrumental)\s*:?\s*(\(?\s*\d+\s*x\s*\)?)?[\s.:]*$/i;
+export const ehLinhaRotuloAcordes = l => l.tipo === 'letra' && l.segs.some(s => s.acorde) && ROTULO_ACORDES.test(l.segs.map(s => s.texto).join(''));
+
 // Gera HTML com acordes acima da letra; quebra de linha natural em telas estreitas
 export function renderizarHTML(chordpro, { semitons = 0, bemol = false, mostrarAcordes = true } = {}) {
   const fonte = semitons || bemol ? transporChordPro(chordpro, semitons, bemol) : chordpro;
@@ -571,6 +575,11 @@ export function renderizarHTML(chordpro, { semitons = 0, bemol = false, mostrarA
     if (l.tipo === 'acordes') {
       if (!mostrarAcordes) continue;
       html.push(`<div class="l so-acordes">${l.segs.map(s => `<b class="ac">${esc(s.acorde)}</b>`).join(' ')}</div>`);
+      continue;
+    }
+    if (ehLinhaRotuloAcordes(l)) {
+      if (!mostrarAcordes) continue;
+      html.push(`<div class="l so-acordes">${l.segs.map(s => (s.acorde ? `<b class="ac">${esc(s.acorde)}</b>` + (s.texto ? '' : ' ') : '') + esc(s.texto)).join('').trim()}</div>`);
       continue;
     }
     const refrao = !!l.refrao;
@@ -596,6 +605,10 @@ export function linhasCifra(chordpro, { semitons = 0, bemol = false, mostrarAcor
     if (l.tipo === 'vazia') { out.push({ tipo: 'vazia', texto: '' }); continue; }
     if (l.tipo === 'comentario') { out.push({ tipo: 'comentario', texto: l.texto }); continue; }
     if (l.tipo === 'acordes') { if (mostrarAcordes) out.push({ tipo: 'acordes', texto: l.segs.map(s => s.acorde).join('  ') }); continue; }
+    if (ehLinhaRotuloAcordes(l)) {
+      if (mostrarAcordes) out.push({ tipo: 'acordes', texto: l.segs.map(s => (s.acorde ? s.acorde + (s.texto.startsWith(' ') ? '' : ' ') : '') + s.texto).join('').replace(/\s+/g, ' ').trim() });
+      continue;
+    }
     let cima = '', baixo = '';
     for (const s of l.segs) {
       if (mostrarAcordes && s.acorde) {
