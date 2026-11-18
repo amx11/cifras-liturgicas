@@ -55,8 +55,10 @@ function eventos(xml) {
   return ev;
 }
 
-export function musicxmlParaChordPro(xml) {
-  const ev = eventos(xml);
+export function musicxmlParaChordPro(xml) { return eventosParaChordPro(eventos(xml)); }
+
+// eventos (do MusicXML ou do MuseScore) -> ChordPro, um bloco por estrofe
+export function eventosParaChordPro(ev) {
   const versos = [...new Set(ev.flatMap(e => e.tipo === 'nota' ? Object.keys(e.silabas) : []))].sort((a, b) => (+a || 99) - (+b || 99));
   if (!versos.length) {            // só acordes (sem letra): uma linha de acordes por sistema
     const linhas = [[]];
@@ -66,21 +68,32 @@ export function musicxmlParaChordPro(xml) {
   const blocos = [];
   for (const v of versos) {
     const linhas = [];
-    let linha = '', pendentes = [], cantou = false;
+    let linha = '', pendentes = [], cantou = false, ultima = -1;   // ultima: onde começa o texto da última sílaba cantada
     for (const e of ev) {
       if (e.tipo === 'quebra') {
-        if (linha.trim()) { linhas.push(linha); linha = ''; }
+        if (linha.trim()) { linhas.push(linha); linha = ''; ultima = -1; }
         else pendentes = [];                                // sistema inteiro sem letra neste verso (introdução, refrão de outro verso)
         continue;
       }
       if (e.tipo === 'acorde') { pendentes.push(e.nome); continue; }
       const s = e.silabas[v];
-      if (!s) continue;                                     // nota sem sílaba neste verso: o acorde espera a próxima sílaba
+      if (!s) {
+        // nota sem sílaba: se é a mesma sílaba ainda soando (melisma/ligadura), o acorde fica nela ("[F/A][C/G]ção");
+        // numa pausa, espera a próxima sílaba
+        if (!e.pausa && pendentes.length && ultima >= 0 && cantou) {
+          // logo depois da sílaba que está soando ("Tu[A6] vieste", "refei[F/A]ção[C/G].")
+          const ins = pendentes.map(a => `[${a}]`).join('');
+          linha = linha.slice(0, ultima) + ins + linha.slice(ultima); ultima += ins.length; pendentes = [];
+        }
+        continue;
+      }
       // palavra partida na quebra de sistema: a sílaba continua a palavra da linha anterior
       if (!linha && linhas.length && /\S$/.test(linhas[linhas.length - 1]) && linhas[linhas.length - 1].endsWith('\u0000')) {
         linha = linhas.pop().slice(0, -1);
       }
-      linha += pendentes.map(a => `[${a}]`).join('') + s.texto + (s.liga ? '\u0000' : ' ');
+      linha += pendentes.map(a => `[${a}]`).join('') + s.texto;
+      ultima = linha.length;                                // fim do texto da sílaba cantada
+      linha += s.liga ? '\u0000' : ' ';
       pendentes = []; cantou = true;
     }
     if (pendentes.length) linha += pendentes.map(a => `[${a}]`).join(' ');

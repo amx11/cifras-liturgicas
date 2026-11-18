@@ -49,9 +49,10 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
           <button class="btn peq" data-semi="1" title="Meio tom acima">+½</button>
           <span class="pequeno suave">Original: <b>${esc(original)}</b>${m.outrosTons?.length ? ` (o PDF da arquidiocese traz também em ${m.outrosTons.map(esc).join(', ')})` : ''}${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
         </div></div>` : ''}
-      ${m.conferida && !m.daPartitura ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
+      ${m.museScore && !m.daPartitura?.formato?.startsWith('musescore') ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com o arquivo MuseScore da arquidiocese (acorde e sílaba nota a nota)${m.museScore.movidos ? ` — ${m.museScore.movidos} ${m.museScore.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'}` : ''}${m.museScore.estrofes ? ` — acordes de ${m.museScore.estrofes} ${m.museScore.estrofes === 1 ? 'estrofe completados' : 'estrofes completados'}` : ''}.</p>` : ''}
+      ${m.conferida && !m.daPartitura && !m.museScore ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
       ${m.daPartitura && m.originalPdf ? `<div class="ocr-aviso nao-imprimir">
-          <span>${m.daPartitura.transcrita ? (m.daPartitura.sugeridos ? '⚠ A partitura não traz acordes: os acordes desta cifra são sugeridos' : '🎼 Cifra transcrita da partitura' + (m.daPartitura.duvidas?.length ? ` — confira: <b>${esc(m.daPartitura.duvidas.join('; '))}</b>` : '')) : m.daPartitura.revisar ? '⚠ Cifra montada a partir da partitura, com pontos a conferir' : m.daPartitura.revisada ? '✓ Cifra montada a partir da partitura e revisada' : '🎼 Cifra montada a partir da partitura (acordes na sílaba da nota)'}.</span>
+          <span>${m.daPartitura.transcrita ? (m.daPartitura.sugeridos ? '⚠ A partitura não traz acordes: os acordes desta cifra são sugeridos' : '🎼 Cifra transcrita da partitura' + (m.daPartitura.duvidas?.length ? ` — confira: <b>${esc(m.daPartitura.duvidas.join('; '))}</b>` : '')) : m.daPartitura.formato === 'musescore' ? '🎼 Cifra montada do arquivo MuseScore da arquidiocese (acorde e sílaba exatos, nota a nota)' : m.daPartitura.revisar ? '⚠ Cifra montada a partir da partitura, com pontos a conferir' : m.daPartitura.revisada ? '✓ Cifra montada a partir da partitura e revisada' : '🎼 Cifra montada a partir da partitura (acordes na sílaba da nota)'}.</span>
           <button type="button" class="btn peq" data-ver-original>Ver original</button>
           ${m.origem === 'arquipoa' ? `<button type="button" class="btn peq${m.daPartitura.revisar ? ' primario' : ''}" data-revisar>Revisar</button>` : ''}
         </div><div class="original-escaneado" hidden></div>` : ''}
@@ -150,11 +151,11 @@ function telaMusicas() {
 
   const atualizar = () => {
     let res = buscar({ termo: filtro.termo, tempo: filtro.tempo ?? null, parte: filtro.parte ?? null, ano: filtro.ano ?? null, origem: filtro.origem, agrupar: !(filtro.revisar || filtro.ocr || filtro.partitura) });
+    const parcial = res.parcial;
     if (filtro.revisar) res = res.filter(m => m.ocr?.revisar || m.daPartitura?.revisar);
     if (filtro.ocr) res = res.filter(m => m.ocr);
     if (filtro.partitura) res = res.filter(m => m.daPartitura);
-    const nVersoes = res.reduce((n, m) => n + (m.totalVersoes > 1 ? 1 : 0), 0);
-    document.getElementById('contagem').textContent = `${res.length} ${res.length === 1 ? 'música' : 'músicas'}${nVersoes ? ` · ${nVersoes} com mais de uma versão` : ''}`;
+    document.getElementById('contagem').textContent = `${res.length} ${res.length === 1 ? 'música' : 'músicas'}${parcial ? ' com parte das palavras (nenhuma tem todas)' : ''}`;
     // Com busca por texto, mantém a ordem de relevância; sem busca, ordem alfabética com letras
     const opcoes = m => ({ extra: x ? `<button class="add-missa" data-add="${esc(m.chave)}" title="Pôr na missa${slot ? ' (' + esc(slot.rotulo) + ')' : ''}" aria-label="Pôr ${esc(m.nome)} na missa">＋</button>` : '' });
     document.getElementById('resultados').innerHTML = filtro.termo

@@ -2,7 +2,7 @@
 // Na partitura o acorde está sobre a nota, então a sílaba dele é exata; na cifra digitada o acorde é
 // posicionado com espaços e às vezes fica uma sílaba antes ou depois. Onde as duas trazem a mesma palavra
 // com o mesmo acorde (no mesmo tom, ou transposto de forma constante), a sílaba da partitura vale.
-import { silabasPalavra, normalizar, transporAcorde } from './cifra.js';
+import { silabasPalavra, normalizar, transporAcorde, detectarTom, preferirBemol } from './cifra.js';
 
 function analisar(cp) {
   const linhas = cp.split('\n').map(l => {
@@ -13,7 +13,7 @@ function analisar(cp) {
   });
   const palavras = [];
   linhas.forEach((l, li) => {
-    const re = /[A-Za-zÀ-ÿ]+(?:['’][A-Za-zÀ-ÿ]+)*/g;
+    const re = /[A-Za-zÀ-ÿ]+(?:['’-][A-Za-zÀ-ÿ]+)*/g;
     let w;
     while ((w = re.exec(l.texto))) {
       const sl = silabasPalavra(w[0]);
@@ -21,19 +21,27 @@ function analisar(cp) {
       // marcas que não são letra cantada: "R." (refrão), "T." (todos), "S." (solista), "Ref"
       const depois = l.texto.slice(w.index + w[0].length, w.index + w[0].length + 2);
       if (/^(R|T|S|Ref|Refr)$/i.test(w[0]) && /^[.:/]/.test(depois)) continue;
-      palavras.push({ li, ini: w.index, fim: w.index + w[0].length, n: normalizar(w[0]), sl, inicios, acordes: [] });
+      palavras.push({ li, ini: w.index, fim: w.index + w[0].length, t: w[0], n: normalizar(w[0]).replace(/\s+/g, ''), sl, inicios, acordes: [] });
     }
   });
   // cada acorde pertence à palavra em que cai (ou à seguinte, se estiver no espaço antes dela)
   linhas.forEach((l, li) => {
     const pal = palavras.filter(p => p.li === li);
     for (const a of l.acordes) {
-      const p = pal.find(p => a.pos >= p.ini && a.pos < p.fim) || pal.find(p => p.ini >= a.pos && p.ini - a.pos <= 2);
-      if (p) { a.palavra = p; a.silaba = a.pos < p.ini ? 0 : p.sl[a.pos - p.ini]; p.acordes.push(a); }
+      let p = pal.find(p => a.pos >= p.ini && a.pos < p.fim) || pal.find(p => p.ini >= a.pos && p.ini - a.pos <= 2);
+      if (p) { a.palavra = p; a.silaba = a.pos < p.ini ? 0 : p.sl[a.pos - p.ini]; p.acordes.push(a); continue; }
+      // logo depois do fim da palavra (sílaba ainda soando, fim de frase): pertence a ela, depois da última letra
+      p = [...pal].reverse().find(p => a.pos >= p.fim && a.pos - p.fim <= 2);
+      if (p) { a.palavra = p; a.fim = true; a.silaba = 99; p.acordes.push(a); }
     }
   });
   return { linhas, palavras };
 }
+
+// posição pela LETRA (não pela minha divisão de sílabas): mesma palavra = mesma letra, mesmo com hífen ou acento diferente
+const ehL = c => /[A-Za-zÀ-ÿ]/.test(c);
+const letrasAte = (t, off) => [...t.slice(0, Math.max(0, off))].filter(ehL).length;
+function posDaLetra(t, k) { let n = 0; for (let i = 0; i < t.length; i++) if (ehL(t[i])) { if (n === k) return i; n++; } return Math.max(0, t.length - 1); }
 
 function alinhar(A, B) {
   const n = A.length, m = B.length;
@@ -96,10 +104,12 @@ export function conferirComPartitura(cifra, partitura, opcoes = {}) {
       }
       if (!b) continue;
       comparados++;
-      const novaSilaba = b.silaba;
-      const pos = alvo.ini + (alvo.inicios[novaSilaba] ?? 0);
-      if (alvo === pc && a.silaba === novaSilaba) continue;
-      if (alvo === pc && a.pos < pc.ini && novaSilaba === 0) continue;   // antes da palavra = 1ª sílaba
+      const pPar = alvo === pc ? pp : P.palavras[idxP.get(C.palavras.indexOf(alvo))];
+      const pos = b.fim ? alvo.fim : alvo.ini + posDaLetra(alvo.t, letrasAte(pPar.t, b.pos - pPar.ini));
+      if (a.pos === pos || (a.pos < alvo.ini && pos === alvo.ini && alvo === pc)) continue;   // já está na letra da partitura
+      if (alvo === pc && a.pos >= pc.ini && a.silaba === b.silaba) { a.novaPos = pos; continue; }   // mesma sílaba: só acerta o começo dela
+      // já existe esse mesmo acorde nessa sílaba (a palavra tem o acorde duas vezes): não duplica
+      if (alvo.acordes.some(x => x !== a && x.nome === a.nome && (x.novaPos ?? x.pos) === pos)) continue;
       a.novaPos = pos; movidos++;
     }
   }
@@ -111,4 +121,77 @@ export function conferirComPartitura(cifra, partitura, opcoes = {}) {
     return out + l.texto.slice(ate);
   }).join('\n');
   return { chordpro, movidos, comparados, renomeados, semitons: melhor.t, palavrasAlinhadas: pares.length, palavrasCifra: C.palavras.length };
+}
+
+// Completa os acordes das estrofes que na cifra vieram só com a letra, usando a partitura exata (MuseScore/MusicXML)
+// em que cada estrofe tem a sua letra sob as notas: cada parágrafo sem acordes é alinhado palavra a palavra com a
+// estrofe da partitura que tem a mesma letra, e o acorde vai para a mesma sílaba. Só aplica quando quase toda a letra
+// do parágrafo foi encontrada (85%) e quase todos os acordes do trecho acharam palavra (90%).
+// Devolve { chordpro, estrofes, acordes } ou null.
+export function completarPelaPartitura(cifra, partitura) {
+  if (!cifra || !partitura) return null;
+  const C = analisar(cifra);
+  const blocos = partitura.split(/\n[ \t]*\n/).map(analisar).filter(b => b.palavras.length);
+  if (!blocos.length) return null;
+  // tom: a cifra pode estar em outro tom que a partitura
+  const temAcordes = /\[[^\]]+\]/.test(cifra);
+  const t = temAcordes ? conferirComPartitura(cifra, partitura).semitons : 0;
+  const volta = (12 - t) % 12, bemol = temAcordes ? preferirBemol(detectarTom(cifra)) : false;
+  // parágrafos da cifra (linhas consecutivas com texto)
+  const pars = [];
+  let atual = null;
+  C.linhas.forEach((l, li) => {
+    if (!l.texto.trim()) { atual = null; return; }
+    if (!atual) { atual = { linhas: [] }; pars.push(atual); }
+    atual.linhas.push(li);
+  });
+  const inserir = new Map();   // li -> [{ pos, nome }]
+  let estrofes = 0, total = 0;
+  for (const p of pars) {
+    if (p.linhas.some(li => C.linhas[li].acordes.length)) continue;
+    const W = C.palavras.filter(w => p.linhas.includes(w.li));
+    if (W.length < 3) continue;
+    let melhor = null;
+    for (const B of blocos) {
+      const pares = alinhar(W, B.palavras);
+      if (!melhor || pares.length > melhor.pares.length) melhor = { B, pares };
+    }
+    if (!melhor || melhor.pares.length < W.length * 0.85) continue;
+    const { B, pares } = melhor;
+    const deJ = new Map(pares.map(([i, j]) => [j, i]));
+    const j0 = pares[0][1], j1 = pares[pares.length - 1][1];
+    const novos = [];
+    let achados = 0, nAcordes = 0;
+    for (let j = j0; j <= j1; j++) {
+      const pw = B.palavras[j];
+      if (!pw.acordes.length) continue;
+      let i = deJ.get(j);
+      if (i === undefined) {
+        // palavra trocada (grafia diferente): mesma distância entre as palavras alinhadas vizinhas
+        let a = pares.filter(([, jj]) => jj < j).pop(), b = pares.find(([, jj]) => jj > j);
+        if (a && b && b[0] - a[0] === b[1] - a[1]) i = a[0] + (j - a[1]);
+      }
+      for (const ac of pw.acordes) {
+        nAcordes++;
+        if (i === undefined) continue;
+        const cw = W[i];
+        const pos = ac.fim ? cw.fim : cw.n === pw.n ? cw.ini + posDaLetra(cw.t, letrasAte(pw.t, ac.pos - pw.ini))
+          : cw.ini + (cw.inicios[Math.min(ac.silaba, cw.inicios.length - 1)] ?? 0);
+        novos.push({ li: cw.li, pos, nome: volta ? transporAcorde(ac.nome, volta, bemol) : ac.nome });
+        achados++;
+      }
+    }
+    if (!nAcordes || achados < nAcordes * 0.9) continue;
+    for (const n of novos) { if (!inserir.has(n.li)) inserir.set(n.li, []); inserir.get(n.li).push(n); }
+    estrofes++; total += achados;
+  }
+  if (!estrofes) return null;
+  const chordpro = cifra.split('\n').map((linha, li) => {
+    const ins = inserir.get(li);
+    if (!ins) return linha;
+    let out = '', ate = 0;
+    for (const n of ins.sort((a, b) => a.pos - b.pos)) { out += linha.slice(ate, n.pos) + `[${n.nome}]`; ate = n.pos; }
+    return out + linha.slice(ate);
+  }).join('\n');
+  return { chordpro, estrofes, acordes: total };
 }

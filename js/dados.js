@@ -115,8 +115,45 @@ export async function salvarCorrecao(chave, campos) {
   return { ok, onde: 'aparelho' };
 }
 
+// Título que não diz qual é a música ("Salmo 144", "Cordeiro de Deus", "Aclamação memorial"): ganha a frase inicial
+// da letra ("Salmo 144 – Bendirei eternamente vosso nome"); quando a letra começa pelo próprio título (texto fixo,
+// como o Cordeiro), o autor/complemento distingue
+const NOME_GENERICO = /^(salmo( \d+)?|hino( do gl[óo]ria)?|canto|c[âa]ntico|aclama[çc][ãa]o( memorial| ao evangelho)?|ant[íi]fona|refr[ãa]o|aleluia!?|santo!?|santo, santo, santo!?|kyrie|gl[óo]ria|cordeiro de deus|doxologia( final)?|sem t[íi]tulo|ofert[óo]rio|comunh[ãa]o|entrada|ato penitencial|senhor,? tende piedade|ladainha|sequ[êe]ncia|pai nosso|creio)$/i;
+function fraseInicial(cp) {
+  for (const bruta of (cp || '').split('\n')) {
+    if (/^\s*\{/.test(bruta)) continue;
+    let l = bruta.replace(/\[[^\]]*\]/g, '').replace(/\/:|:\/|\|:|:\|/g, ' ').trim();
+    // marcas no começo: "R.", "Refrão:", "1.", "S.:", "Pres.:", "Todos:", aspas, e o próprio "Salmo 127 -"
+    for (let ant = null; ant !== l;) {
+      ant = l;
+      l = l.replace(/^(R\s*[.:]+|Refr[ãa]o\s*:?|Ref\s*[.:]|[A-Za-zÀ-ú]{1,5}\.?\s*:|\d+\s*[.)\-–:]|["“'«]|salmo\s+\d+\s*[-–:]?)\s*/i, '').trim();
+    }
+    if (!/[a-zà-ú]{3}/i.test(l) || /^(intro|tom|obs|final|solo)\b/i.test(l)) continue;
+    // até o fim da frase (. ; ! ? ou parêntese), com pelo menos 3 palavras e no máximo 8
+    const frase = l.split(/[.;!?(]/)[0];
+    const partes = frase.split(/[,:]/);
+    let out = [];
+    for (const p of partes) { out.push(...p.trim().split(/\s+/).filter(Boolean)); if (out.length >= 3) break; }
+    out = out.slice(0, 8);
+    if (out.join(' ').length >= 4) return out.join(' ').replace(/["”»]/g, '');
+  }
+  return '';
+}
+function nomear(m) {
+  m.nomeOriginal ??= m.nome;
+  const base = m.nomeOriginal.trim();
+  if (!NOME_GENERICO.test(base)) { m.nome = m.nomeOriginal; return; }
+  const frase = fraseInicial(m.chordpro);
+  const nucleo = normalizar(base.replace(/^(hino do |salmo( \d+)? ?)/i, ''));
+  const repete = frase && nucleo && normalizar(frase).startsWith(nucleo.slice(0, 12));
+  const comp = /simplificada|pasta de cantos/i.test(m.complemento || '') ? '' : (m.complemento || '').replace(/^\(|\)$/g, '').split(' - ')[0].trim();
+  const extra = repete || !frase ? comp : frase;
+  m.nome = extra && normalizar(extra) !== normalizar(base) ? `${base} – ${extra}` : base;
+}
+
 function montarIndice() {
   const todas = [...estado.base, ...estado.minhas.map(m => ({ ...m, origem: 'minha' }))];
+  for (const m of todas) nomear(m);
   for (const m of todas) {
     const ed = estado.edicoes[m.chave];
     if (ed) Object.assign(m, ed, { editada: true });
@@ -181,14 +218,14 @@ function montarIndice() {
     if (!estado.grupos.has(m.grupo)) estado.grupos.set(m.grupo, []);
     estado.grupos.get(m.grupo).push(m);
   }
-  for (const vs of estado.grupos.values()) vs.forEach((m, i) => { m.versao = i + 1; m.totalVersoes = vs.length; });
+  // os grupos por título/texto servem só para a classificação (parte da missa e tempo herdados entre cantos iguais)
   estado.revisaoClassificacao = revisarClassificacao([...estado.grupos.values()]);
-  // Numeração do app (como num cancioneiro): um número por música (título), em ordem alfabética; as versões
-  // compartilham o número. As músicas só suas ficam no fim, para não mudar a numeração do acervo.
+  // Sem versões: cada música é independente, com número próprio (como num cancioneiro), em ordem alfabética.
+  // As músicas só suas ficam no fim, para não mudar a numeração do acervo.
+  estado.grupos = new Map(todas.map(m => { m.grupo = m.chave; m.versao = 1; m.totalVersoes = 1; return [m.chave, [m]]; }));
   let num = 0;
-  const grupos = [...estado.grupos.values()];
-  for (const vs of grupos) if (vs.some(m => m.origem !== 'minha')) { num++; vs.forEach(m => { m.num = num; }); }
-  for (const vs of grupos) if (!vs[0].num) { num++; vs.forEach(m => { m.num = num; }); }
+  for (const m of todas) if (m.origem !== 'minha') m.num = ++num;
+  for (const m of todas) if (m.origem === 'minha') m.num = ++num;
   estado.musicas = todas;
   estado.porChave = new Map(todas.map(m => [m.chave, m]));
 }
@@ -306,31 +343,46 @@ export function excluirMinha(chave) {
 }
 
 // Busca: todas as palavras precisam aparecer no título ou na letra; título vem primeiro
-export function buscar({ termo = '', tempo = null, parte = null, ano = null, origem = null, agrupar = false } = {}) {
-  const palavras = normalizar(termo).split(' ').filter(Boolean);
-  const res = [];
-  // só um número: a música com esse número no app (ou no livro da arquidiocese)
+// Busca: o número da música; ou palavras-chave em qualquer ordem, no título e na letra juntos (com acento ou sem,
+// pedaço de palavra também vale: "alelu" acha "aleluia"); a frase exata vem primeiro. Se nenhuma música tiver
+// todas as palavras, mostra as que têm mais delas.
+const VAZIAS = new Set(['a', 'o', 'e', 'as', 'os', 'de', 'da', 'do', 'das', 'dos', 'que', 'em', 'no', 'na', 'nos', 'nas', 'um', 'uma', 'se', 'me', 'te', 'ao', 'aos', 'por', 'pra', 'para', 'com']);
+export function buscar({ termo = '', tempo = null, parte = null, ano = null, origem = null } = {}) {
+  const frase = normalizar(termo);
+  let palavras = frase.split(' ').filter(Boolean);
+  const chave = palavras.filter(p => !VAZIAS.has(p));
+  if (chave.length) palavras = chave;
   const numero = /^\s*(n[ºo°]?\s*)?\d+\s*$/i.test(termo) ? +termo.replace(/\D/g, '') : null;
+  const todas = [], parciais = [];
   for (const m of estado.musicas) {
     if (numero !== null) {
-      if (m.num === numero || +m.numero === numero) res.push({ m, peso: m.num === numero ? 0 : 1 });
+      if (m.num === numero || +m.numero === numero) todas.push({ m, peso: m.num === numero ? 1e6 : 1e5 });
       continue;
     }
     if (tempo !== null && !m.tempos?.includes(tempo)) continue;
     if (parte !== null && !m.partes?.includes(parte)) continue;
     if (ano !== null && !m.anos?.includes(ano)) continue;
     if (origem && m.origem !== origem) continue;
-    if (palavras.length) {
-      const noTitulo = palavras.every(p => m.buscaTitulo.includes(p));
-      if (!noTitulo && !palavras.every(p => m.buscaLetra.includes(p))) continue;
-      res.push({ m, peso: noTitulo ? 0 : 1 });
-    } else res.push({ m, peso: 0 });
+    if (!palavras.length) { todas.push({ m, peso: 0 }); continue; }
+    const tit = m.buscaTitulo, let_ = m.buscaLetra;
+    let achadas = 0, peso = 0;
+    for (const p of palavras) {
+      const emT = tit.includes(p), emL = let_.includes(p);
+      if (emT || emL) achadas++;
+      // palavra inteira vale mais que pedaço
+      if (emT) peso += (` ${tit} `.includes(` ${p} `) ? 12 : 8);
+      if (emL) peso += (` ${let_} `.includes(` ${p} `) ? 3 : 2);
+    }
+    if (!achadas) continue;
+    if (frase.includes(' ')) {
+      if (tit.includes(frase)) peso += 200; else if (let_.includes(frase)) peso += 120;
+    }
+    if (tit.startsWith(palavras[0])) peso += 5;
+    (achadas === palavras.length ? todas : parciais).push({ m, peso: peso + achadas * 20 });
   }
-  const lista = res.sort((a, b) => a.peso - b.peso).map(r => r.m);
-  if (!agrupar) return lista;
-  // Uma linha por grupo de versões (a primeira versão que passou no filtro)
-  const vistos = new Set();
-  return lista.filter(m => !vistos.has(m.grupo) && vistos.add(m.grupo));
+  const ord = l => l.sort((a, b) => b.peso - a.peso).map(r => r.m);
+  if (todas.length || !palavras.length || numero !== null) return ord(todas);
+  const r = ord(parciais); r.parcial = true; return r;
 }
 
 // Encontra músicas do acervo cuja letra combina com um trecho transcrito
