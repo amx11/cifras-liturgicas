@@ -2,9 +2,12 @@
 // - melisma escrito com hífens/sublinhados repetidos dentro da palavra: "ama------dos" → "amados", "alelu____ia" → "aleluia"
 //   (quando a palavra tem "--", todos os hífens de sílaba dela saem: "a-le---lu-ia" → "aleluia");
 // - sílabas separadas por espaço que vieram da partitura: "San to" → "Santo", "Ho sa na" → "Hosana", "Sen hor" → "Senhor";
-// - letra toda em MAIÚSCULAS → normal (início de verso e nomes sagrados em maiúscula).
+// - letra toda em MAIÚSCULAS → normal (início de verso e nomes sagrados em maiúscula);
+// - linha que é só um endereço (link de vídeo colado na cifra) sai da letra; o vídeo do YouTube fica como link da música;
+// - acorde no meio de uma sílaba ("tig[A]o", "Sen[G]hor") vai para o começo dela ("ti[A]go", "Se[G]nhor").
 // Uso: node tools/limpar-letras.mjs [--sem-salvar] [-v]
 import { readFileSync, writeFileSync } from 'node:fs';
+import { silabasPalavra } from '../app/js/cifra.js';
 const RAIZ = new URL('../', import.meta.url).pathname;
 const v = process.argv.includes('-v'), salvar = !process.argv.includes('--sem-salvar');
 
@@ -59,6 +62,35 @@ function minusculas(cp) {
     });
   }).join('\n');
 }
+// acorde caído no meio de uma sílaba vai para o começo dela (mesmo tempo musical; padrão de cifra).
+// Não mexe entre duas vogais (pode ser hiato: "e-le-i-son") nem em palavras latinas/gregas.
+const ESTRANGEIRAS = /^(kyrie|christe|eleison|gloria|sanctus|agnus|hosanna|dominus|deo|pax|amen|alleluia|magnificat|maranatha)$/i;
+const VOG = /[aeiouáéíóúâêôãõàü]/i;
+function encaixar(linha) {
+  if (!linha.includes('[')) return linha;
+  let texto = '';
+  const acs = [];
+  for (const m of linha.matchAll(/\[([^\]]*)\]|([^[]+)/g)) { if (m[1] !== undefined) acs.push({ pos: texto.length, a: m[0] }); else texto += m[2]; }
+  const re = /[A-Za-zÀ-ÿ]+/g;
+  let w;
+  while ((w = re.exec(texto))) {
+    const ini = w.index, fim = ini + w[0].length;
+    if (ESTRANGEIRAS.test(w[0])) continue;
+    const sl = silabasPalavra(w[0]);
+    for (const c of acs) {
+      if (c.pos <= ini || c.pos >= fim) continue;
+      const k = c.pos - ini;
+      if (sl[k] === sl[k - 1] && !(VOG.test(w[0][k]) && VOG.test(w[0][k - 1]))) {
+        let i = k; while (i > 0 && sl[i - 1] === sl[k]) i--;
+        c.pos = ini + i;
+      }
+    }
+  }
+  let out = '', ate = 0;
+  acs.forEach((c, n) => { c.n = n; });
+  for (const c of acs.sort((x, y) => x.pos - y.pos || x.n - y.n)) { out += texto.slice(ate, c.pos) + c.a; ate = c.pos; }
+  return out + texto.slice(ate);
+}
 const ehMaiusculas = cp => { const ls = cp.replace(/\[[^\]]*\]/g, '').split('\n').filter(l => /[a-zà-ú]{3}/i.test(l)); return ls.length && ls.filter(l => l === l.toUpperCase()).length / ls.length > 0.5; };
 
 let total = 0;
@@ -66,7 +98,13 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json']) {
   const dados = JSON.parse(readFileSync(RAIZ + arq, 'utf8'));
   for (const m of dados.musicas) {
     if (!m.chordpro) continue;
-    let cp = m.chordpro.replace(/\u0000/g, ' ').split('\n').map(l => silabasSeparadas(porPalavra(l, melisma))).join('\n');
+    // links colados na letra
+    const links = m.chordpro.split('\n').filter(l => /^\s*(https?:\/\/|www\.)\S+\s*$/i.test(l.replace(/\[[^\]]*\]/g, '')));
+    for (const l of links) {
+      const yt = l.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/);
+      if (yt && !m.youtube) m.youtube = yt[1];
+    }
+    let cp = m.chordpro.split('\n').filter(l => !links.includes(l)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').map(l => encaixar(silabasSeparadas(porPalavra(l, melisma)))).join('\n');
     if (ehMaiusculas(cp)) cp = minusculas(cp);
     if (cp !== m.chordpro) {
       total++;
