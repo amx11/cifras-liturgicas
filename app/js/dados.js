@@ -64,6 +64,13 @@ export async function carregarAcervo() {
     const r = await fetch('data/adicionadas.json', { cache: 'no-cache' });
     if (r.ok) for (const m of (await r.json()).musicas) estado.base.push({ ...m, chave: 'x' + m.id, origem: 'adicionada' });
   } catch { /* opcional */ }
+  // Cifras dos canais do YouTube "Santa Missa Jovem" e "Salmodiai ao nosso Deus" (com o vídeo para ouvir)
+  for (const arq of ['data/canal.json', 'data/salmodiai.json']) {
+    try {
+      const r = await fetch(arq, { cache: 'no-cache' });
+      if (r.ok) for (const m of (await r.json()).musicas) estado.base.push({ ...m, chave: 'y' + m.id, origem: 'canal' });
+    } catch { /* opcional */ }
+  }
   migrarTons();
   montarIndice();
 }

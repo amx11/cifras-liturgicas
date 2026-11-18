@@ -8,7 +8,7 @@
 //   "[:/]") e linhas de lixo do OCR;
 // - acorde no meio de uma sílaba ("tig[A]o", "Sen[G]hor") vai para o começo dela ("ti[A]go", "Se[G]nhor").
 // Uso: node tools/limpar-letras.mjs [--sem-salvar] [-v]
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { silabasPalavra, ehAcorde } from '../app/js/cifra.js';
 const RAIZ = new URL('../', import.meta.url).pathname;
 const v = process.argv.includes('-v'), salvar = !process.argv.includes('--sem-salvar');
@@ -151,7 +151,8 @@ function repeticoes(cp) {
 const ehMaiusculas = cp => { const ls = cp.replace(/\[[^\]]*\]/g, '').split('\n').filter(l => /[a-zà-ú]{3}/i.test(l)); return ls.length && ls.filter(l => l === l.toUpperCase()).length / ls.length > 0.5; };
 
 let total = 0;
-for (const arq of ['app/data/musicas.json', 'app/data/pasta.json']) {
+for (const arq of ['app/data/musicas.json', 'app/data/pasta.json', 'app/data/canal.json', 'app/data/salmodiai.json']) {
+  if (!existsSync(RAIZ + arq)) continue;
   const dados = JSON.parse(readFileSync(RAIZ + arq, 'utf8'));
   for (const m of dados.musicas) {
     if (!m.chordpro) continue;
