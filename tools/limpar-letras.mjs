@@ -129,6 +129,7 @@ function repeticoes(cp) {
     if (/^\n/.test(par)) return par;
     let p = par
       .replace(/\(\s*(\d+)\s*((?:\[[^\]]*\])+)\s*x\s*\)/gi, '($1x) $2')                    // "(2[A]x)" → "(2x) [A]"
+      .replace(/\(\s*((?:\[[^\]]*\])+)\s*(\d+)\s*x\s*\)/gi, '($2x) $1')                    // "([E]2x)" → "(2x) [E]"
       .replace(/\/::\s*((?:\[[^\]]*\])*)\s*\/((?:\s*\[[^\]]*\])*)\s*:\//g, ' $1$2')       // lixo "/:: [D]/ [G/D] :/" → só os acordes
       .replace(/([.!?])\s*\/:\s*$/gm, '$1:/')                                       // "colherá./:" → "colherá.:/"
       .replace(/\/((?:\[[^\]]*\])+):/g, '/:$1').replace(/:((?:\[[^\]]*\])+)\//g, ':/$1')   // acorde caído dentro do sinal: "/[F]:"

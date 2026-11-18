@@ -27,6 +27,19 @@ const PARTES = [
   [/^final|^envio|^sa[íi]da/i, [18]], [/^maria|^mariano|^nossa senhora/i, [90]],
   [/^divers[oa]s?$|^outros?$/i, []],
 ];
+// tempo litúrgico pelo título e pela descrição (hashtags como "#4ºDomingodaQuaresma"): 1 Advento, 2 Quaresma,
+// 3 Tempo Pascal, 4 Natal, 5 Tempo Comum, 6 Semana Santa, 7 Solenidades e Festas
+const TEMPOS = [
+  [1, /advento/], [4, /natal|epifania|sagrada fam[ií]lia|batismo do senhor|santa m[ãa]e de deus/],
+  [2, /quaresma|cinzas/], [6, /semana santa|ramos|quinta.?feira santa|sexta.?feira santa|s[áa]bado santo|lava.?p[ée]s|ado?ra[çc][ãa]o (d|[àa]) cruz|vig[ií]lia pascal|paix[ãa]o/],
+  [3, /p[áa]scoa|pascal|ressurrei|ascens[ãa]o|pentecostes/], [5, /tempo comum|domingo do tempo comum|\bdtc\b|domingo ?comum/],
+  [7, /corpus christi|sant[ií]ssima trindade|cristo rei|assun[çc][ãa]o|imaculada|aparecida|s[ãa]o pedro e s[ãa]o paulo|todos os santos|finados|s[ãa]o jos[ée]|s[ãa]o jo[ãa]o batista|apresenta[çc][ãa]o do senhor|anuncia[çc][ãa]o|transfigura[çc][ãa]o|exalta[çc][ãa]o da santa cruz|sagrado cora[çc][ãa]o|dedica[çc][ãa]o/],
+];
+const temposDe = (titulo, descricao) => {
+  const t = (titulo + ' ' + (descricao.match(/#\S+/g) || []).join(' ').replace(/([a-z])([A-Z])/g, '$1 $2'))
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/#/g, ' ');
+  return TEMPOS.filter(([, re]) => re.test(t)).map(([n]) => n);
+};
 const musicas = [];
 let semPdf = 0, semCifra = 0;
 ids.forEach((vid, i) => {
@@ -75,7 +88,7 @@ for (const { vid, v, arq, i } of musicas) {
   const partes = temParte ? PARTES.find(([re]) => re.test(parteTxt))[1] : (CFG.partes || (/^salmo/i.test(tituloVideo) ? [6] : []));
   saida.push({
     id: CFG.base + i, nome, titulo: tituloVideo, complemento: [CFG.nome, temParte && !ehSalmo && PARTES.find(([re]) => re.test(parteTxt))[1].length ? parteTxt : '', ocasiao].filter(Boolean).join(' · '),
-    numero: null, partes, tempos: [], anos: [], categorias: [], cabecalho: (r.cabecalho || []).filter(l => l.trim()),
+    numero: null, partes, tempos: temposDe(tituloVideo, v.descricao || ''), anos: [], categorias: [], cabecalho: (r.cabecalho || []).filter(l => l.trim()),
     youtube: vid, chordpro: r.chordpro, tom: detectarTom(r.chordpro), temCifra: true, fonte: `https://www.youtube.com/watch?v=${vid}`,
   });
 }

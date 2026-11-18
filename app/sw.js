@@ -1,5 +1,5 @@
 // Service worker: guarda o app e o acervo para funcionar sem internet
-const VERSAO = 'cl-v50';
+const VERSAO = 'cl-v51';
 const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/ui.js', 'js/dados.js', 'js/cifra.js', 'js/pdf.js',
   'js/missas.js', 'js/importar.js', 'js/ouvir.js', 'js/tocar.js', 'js/painel.js', 'js/exportar.js', 'js/pdf-missa.js', 'js/visualizar-pdf.js', 'js/ocr.js', 'js/ocr-cifra.js', 'js/partitura.js', 'js/partitura-imagem.js', 'js/conferir.js', 'js/musicxml.js', 'vendor/fflate.mjs', 'vendor/jspdf.umd.min.js', 'js/acordes-audio.js', 'js/afinador.js', 'js/afinador-nucleo.js', 'js/sumario.js', 'js/classificar.js', 'js/mscx.js', 'manifest.webmanifest', 'icone.svg',
   'icone-192.png', 'icone-512.png', 'data/musicas.json', 'data/pasta.json', 'data/repertorios.json', 'data/adicionadas.json', 'data/canal.json', 'data/salmodiai.json'];
