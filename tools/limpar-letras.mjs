@@ -24,7 +24,7 @@ function porPalavra(linha, f) {
 }
 const L = 'A-Za-zÀ-ÿ\uE000';
 const melisma = tok => {
-  let t = tok.replace(/^_{2,}/, '');
+  let t = tok.replace(/^_{3,}/, '(nome) ');                                        // lacuna para um nome: "_____ será abençoado"
   t = t.replace(new RegExp(`([${L}])_+(?=[${L}])`, 'g'), '$1');                // sublinhado nunca é letra
   t = t.replace(new RegExp(`([${L}])-{2,}(?=[${L}])`, 'g'), '$1');             // "--" é sempre melisma
   // hífen simples entre pedaços curtos de sílaba ("a-le-lu-ia"), não em palavras compostas ("Cristo-Palavra", "dai-nos")
@@ -106,6 +106,21 @@ function colchetes(linha) {
   for (let ant = null; ant !== l;) { ant = l; l = l.replace(/\[([^\]]+)\](\s*)\[\1\]/g, '[$1]$2'); }
   return l;
 }
+// linha de acordes escrita como texto ("Intro: G D/F# Em", "(solo) E9 E/G#"): cada acorde vira [acorde]
+function linhaDeAcordes(l) {
+  if (l.includes('[')) return l;
+  const m = l.match(/^(\s*\(?(?:intro(?:du[çc][ãa]o)?|solo|final|ponte|riff|base)\)?\s*:?\s*)?(.*)$/i);
+  const rot = m[1] || '', resto = m[2].replace(/\b([A-G][#b]?m?)\s+(\d{1,2})(?=\s|$)/g, '$1$2');   // "D 7" = D7
+  const toks = resto.trim().split(/\s+/).filter(Boolean);
+  const ac = toks.filter(t => !/^[|%:()\-x\d\/]+$/i.test(t) && !/^\(?\d+\s*x\)?$/i.test(t));
+  if (ac.length < 2 || !ac.every(t => ehAcorde(t.replace(/[(),]/g, '')))) return l;
+  const novo = resto.replace(/\S+/g, t => {
+    const limpo = t.replace(/[(),]/g, '');
+    return ac.includes(t) && ehAcorde(limpo) ? t.replace(limpo, `[${limpo}]`) : t;
+  });
+  const r = rot.trim().replace(/^\(|\)$/g, '').replace(/\)?\s*:?$/, ':');
+  return (rot ? r[0].toUpperCase() + r.slice(1) + ' ' : '') + novo.trim();
+}
 const LIXO = [/^\s*[\[\]]\s*$/, /^A so \|\.\) \[fg/];
 const ehMaiusculas = cp => { const ls = cp.replace(/\[[^\]]*\]/g, '').split('\n').filter(l => /[a-zà-ú]{3}/i.test(l)); return ls.length && ls.filter(l => l === l.toUpperCase()).length / ls.length > 0.5; };
 
@@ -120,7 +135,31 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json']) {
       const yt = l.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/);
       if (yt && !m.youtube) m.youtube = yt[1];
     }
-    let cp = m.chordpro.split('\n').filter(l => !links.includes(l)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(l), melisma)))).join('\n');
+    // cabeçalho repetido no começo da letra ("Fica conosco" / "Envio 3º DTP" / "81. Fica conosco - Envio 3º DTP"):
+    // linhas sem acorde, antes da primeira linha com acorde, cujo texto todo está no título/complemento
+    const ident = (m.nome + ' ' + (m.complemento || '') + ' ' + (m.titulo || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const linhasCp = m.chordpro.split('\n');
+    const primeiraComAcorde = linhasCp.findIndex(l => /\[[^\]]+\]/.test(l));
+    const cabecalhoRepetido = new Set();
+    if (primeiraComAcorde > 0) for (let i = 0; i < primeiraComAcorde; i++) {
+      const n = linhasCp[i].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!n) continue;
+      if (n.length >= 4 && ident.includes(n)) cabecalhoRepetido.add(i);
+    }
+    // e informações da folha antes da 1ª linha com acorde (parte da missa, solenidade, autores, tom original…):
+    // saem da letra e ficam no cabeçalho da música
+    const META = /(^|\s|[-–(])(abertura|entrada|comunh[ãa]o|oferendas|apres\.|apresenta[çc][ãa]o das|aclama[çc][ãa]o( ao evangelho)?|ato penitencial|rito penitencial|f[óo]rmula|missal|adapt|rec\.\s*setor|setor dia|salmo para|tom original|tonalidade|refr[ãa]o orante|taiz[eè]|letra e m[úu]sica|texto e melodia|vers[ãa]o simplificada|ant\.|s[úu]plica|canto final|solenidade|insp\.|cong\.|lecion[áa]rio|prep\. das|corpus christi|adora[çc][ãa]o da cruz|envio\s+\d|edi[çc][ãa]o|^\s*salmo\s+\d+\s*[-–]|m[úu]sica\)|\b(frei|fr\.|pe\.|padre|ir\.|dom)\s+[A-ZÀ-Ú]|estrofes( e m\.)?:|\bL\s*[.:]|\bM\s*[.:]|^=\s*\d+)/i;
+    const pre = primeiraComAcorde > 0 ? linhasCp.slice(0, primeiraComAcorde).map((l, i) => i).filter(i => linhasCp[i].trim() && !cabecalhoRepetido.has(i)) : [];
+    const estudo = pre.filter(i => !META.test(linhasCp[i]) && !/^\s*(R\s*[.:]|\d+\s*[.)])/.test(linhasCp[i])).length > 10;   // página de estudo antes da cifra
+    for (const i of pre) {
+      const l = linhasCp[i];
+      if (/^\s*(R\s*[.:]|Refr[ãa]o\s*(:|para|ano)|\d+\s*[.)])/i.test(l) && !estudo) continue;     // letra
+      if (estudo || (META.test(l) && l.length <= 160)) {
+        cabecalhoRepetido.add(i);
+        if (!estudo) m.cabecalho = [...new Set([...(m.cabecalho || []), l.trim()])];
+      }
+    }
+    let cp = m.chordpro.split('\n').filter((l, i) => !links.includes(l) && !cabecalhoRepetido.has(i)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(linhaDeAcordes(l)), melisma)))).join('\n');
     if (ehMaiusculas(cp)) cp = minusculas(cp);
     if (cp !== m.chordpro) {
       total++;

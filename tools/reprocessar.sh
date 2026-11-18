@@ -11,6 +11,7 @@ node tools/reconverter-texto.mjs
 node tools/ocr-escaneadas.mjs
 node tools/partituras-cifra.mjs
 node tools/separar-paginas.mjs
+node tools/separar-copias.mjs
 node tools/conferir-partituras.mjs
 node tools/mscz-cifras.mjs
 node tools/aplicar-transcricoes.mjs
