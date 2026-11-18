@@ -58,7 +58,8 @@ function eventos(xml) {
 export function musicxmlParaChordPro(xml) { return eventosParaChordPro(eventos(xml)); }
 
 // eventos (do MusicXML ou do MuseScore) -> ChordPro, um bloco por estrofe
-export function eventosParaChordPro(ev) {
+// opcoes.frases: sem quebras de sistema marcadas, quebra a linha nas pausas depois de um trecho de ~28 letras
+export function eventosParaChordPro(ev, opcoes = {}) {
   const versos = [...new Set(ev.flatMap(e => e.tipo === 'nota' ? Object.keys(e.silabas) : []))].sort((a, b) => (+a || 99) - (+b || 99));
   if (!versos.length) {            // só acordes (sem letra): uma linha de acordes por sistema
     const linhas = [[]];
@@ -80,6 +81,9 @@ export function eventosParaChordPro(ev) {
       if (!s) {
         // nota sem sílaba: se é a mesma sílaba ainda soando (melisma/ligadura), o acorde fica nela ("[F/A][C/G]ção");
         // numa pausa, espera a próxima sílaba
+        if (e.pausa && opcoes.frases && linha.replace(/\[[^\]]*\]/g, '').trim().length >= 28 && !linha.endsWith('\u0000')) {
+          linhas.push(linha); linha = ''; ultima = -1; continue;
+        }
         if (!e.pausa && pendentes.length && ultima >= 0 && cantou) {
           // logo depois da sílaba que está soando ("Tu[A6] vieste", "refei[F/A]ção[C/G].")
           const ins = pendentes.map(a => `[${a}]`).join('');
