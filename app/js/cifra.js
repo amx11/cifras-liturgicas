@@ -109,7 +109,7 @@ export function marcarRepeticoes(texto) {
   const jaTemVezes = /^\s*\.?\s*(\(?\s*\d+\s*x\b|bis\b)/i;
   return texto.split(/(\n[ \t]*\n)/).map(par => {
     let aberto = false;
-    const r = par.replace(/(\[[^\]]*\]|[a-z]+:\/\/\S*)|\s*(\/:|:\/|\|:|:\||:\\)\s*/gi, (todo, ignorar, sinal, pos, s) => {
+    const r = par.replace(/(\[[^\]]*\]|[a-z]+:\/\/\S*)|[ \t]*(\/:|:\/|\|:|:\||:\\)[ \t]*/gi, (todo, ignorar, sinal, pos, s) => {
       if (ignorar) return todo;                                  // acorde ou endereço (https://)
       const fimLinha = s.indexOf('\n', pos);
       const inicioLinha = s.lastIndexOf('\n', pos - 1) + 1;
@@ -146,6 +146,7 @@ function marcarRefroes(linhas) {
   const vezes = new Map();
   for (const p of pars) { const k = chave(p); if (k.length > 15) vezes.set(k, (vezes.get(k) || 0) + 1); }
   for (const p of pars) if (vezes.get(chave(p)) > 1 && !NUMERO_ESTROFE.test(textoDaLinha(p[0]))) p.forEach(l => { l.refrao = true; });
+  for (const p of pars) if (p.some(l => l.blocoRepetido)) p.forEach(l => { if (l.blocoRepetido) l.refrao = true; });
   const usaMarca = pars.some(p => p.some(l => MARCA_REFRAO.test(textoDaLinha(l))));
   for (const p of pars) {
     const primeira = textoDaLinha(p[0]).trim();
@@ -173,7 +174,7 @@ function separarEstrofes(linhas) {
     const l = linhas[i];
     if (l.tipo !== 'letra') continue;
     const t = textoDaLinha(l);
-    if (!NUMERO_ESTROFE.test(t) && !MARCA_REFRAO.test(t)) continue;
+    if (!NUMERO_ESTROFE.test(t) && !MARCA_REFRAO.test(t) && !l.inicioBloco) continue;
     let ini = i;
     if (linhas[i - 1].tipo === 'acordes') ini = i - 1;
     const ant = linhas[ini - 1];
@@ -181,9 +182,43 @@ function separarEstrofes(linhas) {
   }
 }
 
+// Bloco de 2+ linhas inteiro entre sinais de repetição, começando no início de uma linha (/: … :/): é refrão,
+// mesmo sem "R." (comum na Pasta de Cantos), e começa um parágrafo próprio. Devolve os índices das linhas.
+function blocosRepetidos(texto) {
+  const ls = texto.split(/\r?\n/), marcadas = new Map();
+  const sem = l => l.replace(/\[[^\]]*\]/g, '');
+  // estrofes numeradas: se as da 2ª em diante têm todas o mesmo número de linhas (L), um bloco dentro da 1ª estrofe
+  // que começa depois da linha L é o refrão grudado nela; dentro de qualquer outra estrofe numerada é parte dela
+  const pars = [];
+  for (let i = 0, ini = 0; i <= ls.length; i++) if (i === ls.length || !sem(ls[i]).trim()) { if (i > ini) pars.push([ini, i - 1]); ini = i + 1; }
+  const numeradas = pars.filter(([a]) => NUMERO_ESTROFE.test(sem(ls[a])));
+  const tam = numeradas.slice(1).map(([a, b]) => b - a + 1);
+  const L = tam.length >= 1 && tam.every(x => x === tam[0]) ? tam[0] : null;
+  const parDe = i => pars.find(([a, b]) => i >= a && i <= b);
+  for (let i = 0; i < ls.length; i++) {
+    const t = sem(ls[i]);
+    if (!t.trim()) continue;
+    if (!/^\s*(R\s*[.:]+\s*|Refr[ãa]o\s*:?\s*)?(\/:|:\/|\|:)/i.test(t) || NUMERO_ESTROFE.test(t)) continue;
+    const par = parDe(i);
+    if (par && i > par[0] && NUMERO_ESTROFE.test(sem(ls[par[0]]))) {
+      const primeira = numeradas[0] && numeradas[0][0] === par[0];
+      if (!primeira || L === null || i - par[0] < L) continue;                // parte da estrofe
+    }
+    let j = i, fim = -1;
+    const resto = t.replace(/^\s*(R\s*[.:]+\s*|Refr[ãa]o\s*:?\s*)?(\/:|:\/|\|:)/i, '');
+    if (/(:\/|:\||:\\)/.test(resto)) continue;                     // abre e fecha na mesma linha: uma frase só
+    for (j = i + 1; j < ls.length && sem(ls[j]).trim(); j++) if (/(:\/|:\||:\\)/.test(sem(ls[j]))) { fim = j; break; }
+    if (fim < 0) continue;
+    for (let k = i; k <= fim; k++) marcadas.set(k, k === i);
+    i = fim;
+  }
+  return marcadas;
+}
+
 export function parseChordPro(texto) {
   const meta = {};
   const linhas = [];
+  const repetidos = blocosRepetidos(texto || '');
   texto = marcarRepeticoes(texto || '');
   for (const bruta of texto.split(/\r?\n/)) {
     const d = bruta.match(/^\{(\w+)(?::\s*(.*))?\}\s*$/);
@@ -197,7 +232,9 @@ export function parseChordPro(texto) {
     if (!bruta.trim()) { linhas.push({ tipo: 'vazia' }); continue; }
     const segs = segmentos(bruta);
     const temTexto = segs.some(s => s.texto.trim());
-    linhas.push({ tipo: temTexto ? 'letra' : 'acordes', segs });
+    const l = { tipo: temTexto ? 'letra' : 'acordes', segs };
+    if (repetidos.has(linhas.length)) { l.blocoRepetido = true; if (repetidos.get(linhas.length)) l.inicioBloco = true; }
+    linhas.push(l);
   }
   separarEstrofes(linhas);
   marcarRefroes(linhas);

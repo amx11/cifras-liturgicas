@@ -7,9 +7,12 @@ import { detectarTom } from '../app/js/cifra.js';
 const RAIZ = new URL('../', import.meta.url).pathname;
 const ARQ = RAIZ + 'app/data/musicas.json', DIR = RAIZ + 'tools/transcricoes/';
 const dados = JSON.parse(readFileSync(ARQ, 'utf8'));
+// cantos da Pasta de Cantos (id 900000+) ficam em pasta.json
+const ARQ_PASTA = RAIZ + 'app/data/pasta.json';
+const pasta = JSON.parse(readFileSync(ARQ_PASTA, 'utf8'));
 let n = 0;
 for (const f of readdirSync(DIR).filter(f => /^\d+\.txt$/.test(f))) {
-  const id = +f.slice(0, -4), m = dados.musicas.find(x => x.id === id);
+  const id = +f.slice(0, -4), m = (id >= 900000 ? pasta : dados).musicas.find(x => x.id === id);
   if (!m) { console.log('sem música no acervo:', f); continue; }
   const linhas = readFileSync(DIR + f, 'utf8').replace(/\r/g, '').split('\n');
   const notas = linhas.filter(l => l.startsWith('# ')).map(l => l.slice(2).replace(/^conferir:\s*/, '').trim());
@@ -21,6 +24,6 @@ for (const f of readdirSync(DIR).filter(f => /^\d+\.txt$/.test(f))) {
   delete m.ocr; delete m.conferida;
   n++;
 }
-if (!process.argv.includes('--sem-salvar')) writeFileSync(ARQ, JSON.stringify(dados));
+if (!process.argv.includes('--sem-salvar')) { writeFileSync(ARQ, JSON.stringify(dados)); writeFileSync(ARQ_PASTA, JSON.stringify(pasta)); }
 const sem = dados.musicas.filter(m => m.id < 100000 && !m.chordpro);
 console.log(`${n} transcrições aplicadas · ${sem.length} músicas ainda sem cifra: ${sem.map(m => m.id).join(', ')}`);

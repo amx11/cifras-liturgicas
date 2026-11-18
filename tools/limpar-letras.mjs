@@ -127,7 +127,11 @@ const LIXO = [/^\s*[\[\]]\s*$/, /^A so \|\.\) \[fg/];
 function repeticoes(cp) {
   return cp.split(/(\n[ \t]*\n)/).map(par => {
     if (/^\n/.test(par)) return par;
-    let p = par.replace(/\/((?:\[[^\]]*\])+):/g, '/:$1').replace(/:((?:\[[^\]]*\])+)\//g, ':/$1')   // acorde caído dentro do sinal: "/[F]:"
+    let p = par
+      .replace(/\(\s*(\d+)\s*((?:\[[^\]]*\])+)\s*x\s*\)/gi, '($1x) $2')                    // "(2[A]x)" → "(2x) [A]"
+      .replace(/\/::\s*((?:\[[^\]]*\])*)\s*\/((?:\s*\[[^\]]*\])*)\s*:\//g, ' $1$2')       // lixo "/:: [D]/ [G/D] :/" → só os acordes
+      .replace(/([.!?])\s*\/:\s*$/gm, '$1:/')                                       // "colherá./:" → "colherá.:/"
+      .replace(/\/((?:\[[^\]]*\])+):/g, '/:$1').replace(/:((?:\[[^\]]*\])+)\//g, ':/$1')   // acorde caído dentro do sinal: "/[F]:"
       .replace(/\/::\s*\/\s*:\//g, ':/').replace(/:\s+\/(?=\s*$|\s*\n|\s*\()/gm, ':/');
     const sinais = () => (p.replace(/\[[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').match(/\/:|:\/|\|:|:\||:\\/g) || []);
     let s = sinais();
@@ -183,6 +187,11 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json']) {
     }
     let cp = m.chordpro.split('\n').filter((l, i) => !links.includes(l) && !cabecalhoRepetido.has(i)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(linhaDeAcordes(l)), melisma)))).join('\n');
     cp = repeticoes(cp);
+    // "/" sozinho no fim do verso (separador de verso que sobrou do PDF)
+    cp = cp.split('\n').map(l => /[^:/\s]\s*\/\s*$/.test(l.replace(/\[[^\]]*\]/g, '')) && !/https?:|\/:/.test(l) ? l.replace(/\s*\/(\s*)$/, '$1') : l).join('\n');
+    // refrão começando no meio da linha ("...sim. R. Por onde formos...") vai para um parágrafo próprio
+    // (não mexe em "S: ... R: ..." de solista e resposta)
+    cp = cp.split('\n').map(l => /\bS\s*[.:]/.test(l.replace(/\[[^\]]*\]/g, '')) ? l : l.replace(/([.!?])\s+(R\.\s+(?=(?:\[[^\]]*\])*[A-ZÀ-Ú"“]))/, '$1\n\n$2')).join('\n');
     if (ehMaiusculas(cp)) cp = minusculas(cp);
     if (cp !== m.chordpro) {
       total++;
