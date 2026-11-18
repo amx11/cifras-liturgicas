@@ -79,9 +79,10 @@ async function modal(tipo, id) {
 
 // Os arquivos no servidor usam nomes com acentos decompostos (NFD)
 function urlArquivo(url) {
-  const u = new URL(decodificar(url));
+  // "#" faz parte de alguns nomes ("...Senhor-F#m.pdf"): não é âncora
+  const u = new URL(decodificar(url).replace(/#/g, '%23'));
   const caminho = decodeURIComponent(u.pathname).normalize('NFD');
-  return u.origin + encodeURI(caminho);
+  return u.origin + encodeURI(caminho).replace(/#/g, '%23');
 }
 
 async function baixarPdf(url, nome) {
