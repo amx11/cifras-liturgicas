@@ -138,6 +138,11 @@ function marcarRefroes(linhas) {
   }
   if (atual.length) pars.push(atual);
   const numeradas = pars.filter(p => NUMERO_ESTROFE.test(textoDaLinha(p[0]))).length;
+  // parágrafo sem número que aparece igual mais de uma vez na música é o refrão, mesmo sem "R."
+  const chave = p => p.map(textoDaLinha).join(' ').toLowerCase().replace(/[^a-zà-ú ]/g, '').replace(/\s+/g, ' ').trim();
+  const vezes = new Map();
+  for (const p of pars) { const k = chave(p); if (k.length > 15) vezes.set(k, (vezes.get(k) || 0) + 1); }
+  for (const p of pars) if (vezes.get(chave(p)) > 1 && !NUMERO_ESTROFE.test(textoDaLinha(p[0]))) p.forEach(l => { l.refrao = true; });
   const usaMarca = pars.some(p => p.some(l => MARCA_REFRAO.test(textoDaLinha(l))));
   for (const p of pars) {
     const primeira = textoDaLinha(p[0]).trim();
