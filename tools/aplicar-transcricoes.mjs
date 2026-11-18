@@ -1,7 +1,7 @@
 // Transcrições feitas à mão (lendo a partitura) para as músicas que nenhum conversor conseguiu cifrar:
 // tools/transcricoes/<id>.txt em ChordPro. Linhas iniciadas por "# " são observações e viram pontos a conferir
 // no app ("# conferir: ..."). Roda por último no reprocessamento. Uso: node tools/aplicar-transcricoes.mjs [--sem-salvar]
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { detectarTom } from '../app/js/cifra.js';
 
 const RAIZ = new URL('../', import.meta.url).pathname;
@@ -10,10 +10,15 @@ const dados = JSON.parse(readFileSync(ARQ, 'utf8'));
 // cantos da Pasta de Cantos (id 900000+) ficam em pasta.json
 const ARQ_PASTA = RAIZ + 'app/data/pasta.json';
 const pasta = JSON.parse(readFileSync(ARQ_PASTA, 'utf8'));
+// cantos dos canais do YouTube: 700000+ (Santa Missa Jovem) e 710000+ (Salmodiai ao nosso Deus)
+const canais = { 70: 'canal.json', 71: 'salmodiai.json' };
+const dadosCanal = {};
+for (const [k, f] of Object.entries(canais)) if (existsSync(RAIZ + 'app/data/' + f)) dadosCanal[k] = JSON.parse(readFileSync(RAIZ + 'app/data/' + f, 'utf8'));
 let n = 0;
 for (const f of readdirSync(DIR).filter(f => /^\d+\.txt$/.test(f))) {
   const id = +f.slice(0, -4);
-  let m = (id >= 900000 ? pasta : dados).musicas.find(x => x.id === id);
+  const fonte = id >= 900000 ? pasta : id >= 700000 && id < 720000 ? dadosCanal[Math.floor(id / 10000)] : dados;
+  let m = fonte?.musicas.find(x => x.id === id);
   // 400000 + id (2ª melodia), 410000 + id (3ª)…: outra melodia que vinha no mesmo arquivo da partitura → música
   // própria, com os dados da original
   if (!m && id >= 400000 && id < 500000) {
@@ -31,6 +36,9 @@ for (const f of readdirSync(DIR).filter(f => /^\d+\.txt$/.test(f))) {
   delete m.ocr; delete m.conferida;
   n++;
 }
-if (!process.argv.includes('--sem-salvar')) { writeFileSync(ARQ, JSON.stringify(dados)); writeFileSync(ARQ_PASTA, JSON.stringify(pasta)); }
+if (!process.argv.includes('--sem-salvar')) {
+  writeFileSync(ARQ, JSON.stringify(dados)); writeFileSync(ARQ_PASTA, JSON.stringify(pasta));
+  for (const [k, f] of Object.entries(canais)) if (dadosCanal[k]) writeFileSync(RAIZ + 'app/data/' + f, JSON.stringify(dadosCanal[k]));
+}
 const sem = dados.musicas.filter(m => m.id < 100000 && !m.chordpro);
 console.log(`${n} transcrições aplicadas · ${sem.length} músicas ainda sem cifra: ${sem.map(m => m.id).join(', ')}`);

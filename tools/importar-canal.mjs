@@ -2,6 +2,7 @@
 // Nome e parte da missa vêm do título do vídeo ("Entrada - Hino à Nossa Senhora da Assunção"); o vídeo fica como
 // link para ouvir. Depois rode node tools/limpar-letras.mjs (maiúsculas, acorde no começo da sílaba…).
 // Também o canal "Salmodiai ao nosso Deus" (cifra em Google Docs, texto monoespaçado) → app/data/salmodiai.json.
+// Depois: node tools/aplicar-transcricoes.mjs (correções à mão dos cantos dos canais) e node tools/limpar-letras.mjs.
 // Uso: node tools/importar-canal.mjs [canal|salmodiai]
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { pdfParaCifra } from '../app/js/pdf.js';
