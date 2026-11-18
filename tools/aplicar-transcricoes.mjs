@@ -12,7 +12,13 @@ const ARQ_PASTA = RAIZ + 'app/data/pasta.json';
 const pasta = JSON.parse(readFileSync(ARQ_PASTA, 'utf8'));
 let n = 0;
 for (const f of readdirSync(DIR).filter(f => /^\d+\.txt$/.test(f))) {
-  const id = +f.slice(0, -4), m = (id >= 900000 ? pasta : dados).musicas.find(x => x.id === id);
+  const id = +f.slice(0, -4);
+  let m = (id >= 900000 ? pasta : dados).musicas.find(x => x.id === id);
+  // 400000 + id: 2ª melodia que vinha no mesmo arquivo da partitura → música própria, com os dados da original
+  if (!m && id >= 400000 && id < 500000) {
+    const base = dados.musicas.find(x => x.id === id - 400000);
+    if (base) { m = { ...base, id, complemento: [base.complemento, '2ª melodia da mesma partitura'].filter(Boolean).join(' · '), museScore: undefined, conferida: undefined }; dados.musicas.push(m); }
+  }
   if (!m) { console.log('sem música no acervo:', f); continue; }
   const linhas = readFileSync(DIR + f, 'utf8').replace(/\r/g, '').split('\n');
   const notas = linhas.filter(l => l.startsWith('# ')).map(l => l.slice(2).replace(/^conferir:\s*/, '').trim());
