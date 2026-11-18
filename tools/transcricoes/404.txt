@@ -1,0 +1,10 @@
+# conferir: transcrita do MuseScore da arquidiocese; o arquivo traz duas melodias (Dó maior e Ré maior)
+R. [C]Alelu[Am]ia, [G]Alelu[Em]ia, [F]Ale[Am]lu[C]ia.
+
+V. Ma[C]ri[Am]a, a[G]legra-te, ó [F]cheia de [Am]graça,[C] o Se[F]nhor é con[C]tigo! R.
+
+{c: Outra melodia (Ré maior)}
+R. [D]A[A]le[Bm]lu[F#m]ia, [G]ale[A]lu[D]ia!
+
+V. [D]Maria, alegra-te, ó [A]cheia de [Bm]graça,
+[G]o Senhor [Em7]é con[A]tigo! R.

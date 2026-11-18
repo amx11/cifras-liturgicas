@@ -17,6 +17,7 @@ const norm = l => normalizar(semAc(l)).replace(/[^a-z0-9]/g, '');
 const CREDITO = /^\s*(L\.?\s*e\s*M\.?|L\.|M\.|Arr\.|Letra|M[úu]sica|Autor(es)?|Harm\.?)\s*:/i;
 const ANDAMENTO = /^\s*=\s*\d+\s*$/;
 const VOZES = /^\s*(Soprano|Contralto|Tenor|Baixo)\b.*\d/i;
+const RODAPE = /Arquidiocese de Porto Alegre\s*-\s*Comiss|Material para fins did[áa]ticos|Colabora com este material|^\s*\d+º? Domingo d[oe] .*[–-]\s*Ano [ABC]\s*:|Conforme grava[çc][ãa]o|^\s*Retirado do material|Material elaborado por/i;
 const SEPARADOR = /^\s*[-=_.·*]{3,}\s*$|^\s*\.\s*$/;
 const TITULO_COPIA = l => { const t = semAc(l).trim(); return !l.includes('[') && t && ((/:\s*$/.test(t) && !/\/:\s*$|:\/\s*$/.test(t)) || (t === t.toUpperCase() && /[A-ZÀ-Ú]{3,}.*\s.*[A-ZÀ-Ú]{3,}/.test(t)) || /original|cifras? simplificad|^em (d[óo]|r[ée]|mi|f[áa]|sol|l[áa]|si)\b|\b(maior|menor)\)?\s*:?\s*$/i.test(t) || /^\d{2,4}\s*[-–.]\s*\S/.test(t)); };
 const acordes = cp => (cp.match(/\[([^\]]+)\]/g) || []).map(a => a.slice(1, -1)).filter(a => /^\(?[A-G]/.test(a));
@@ -24,13 +25,13 @@ const acordes = cp => (cp.match(/\[([^\]]+)\]/g) || []).map(a => a.slice(1, -1))
 let copias = 0, transpostas = 0, creditos = 0, limpas = 0;
 const novas = [];
 for (const m of dados.musicas) {
-  if (!m.chordpro || m.id >= 100000) continue;
+  if (!m.chordpro || (m.id >= 100000 && m.id < 300000)) continue;
   let ls = m.chordpro.split('\n');
   // 1) créditos e lixo de partitura fora da letra
   const antes = ls.length;
   const cred = ls.filter(l => CREDITO.test(semAc(l)) && !/\[/.test(l));
   if (cred.length) { m.cabecalho = [...new Set([...(m.cabecalho || []), ...cred.map(l => semAc(l).trim())])]; creditos++; }
-  ls = ls.filter(l => !cred.includes(l) && !ANDAMENTO.test(l) && !VOZES.test(semAc(l)) && !SEPARADOR.test(l));
+  ls = ls.filter(l => !cred.includes(l) && !ANDAMENTO.test(l) && !VOZES.test(semAc(l)) && !SEPARADOR.test(l) && !RODAPE.test(semAc(l)));
   if (ls.length !== antes) limpas++;
   // 2) segunda cópia: a estrofe 1 aparece de novo, igual
   const pl = ls.map(norm);
@@ -57,7 +58,7 @@ for (const m of dados.musicas) {
     m.tom = detectarTom(a) || m.tom;
     if (/transposto|transposi/i.test(titulo)) t = 0;   // o próprio PDF diz que é a mesma cifra em outro tom
     if (t >= 0) { m.outrosTons = [...new Set([...(m.outrosTons || []), detectarTom(b)])]; transpostas++; continue; }
-    if (bb.length >= 3) {
+    if (bb.length >= 3 && m.id < 300000) {
       novas.push({ ...m, id: 300000 + m.id, chordpro: b, tom: detectarTom(b), complemento: [m.complemento, titulo || 'outra cifra do mesmo PDF'].filter(Boolean).join(' · '),
         museScore: undefined, conferida: undefined, outrosTons: undefined });
       copias++;

@@ -26,7 +26,7 @@ const txt = (n, t) => { const f = t ? filho(n, t) : n; return f ? desc((f.texto 
 const desc = s => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
 // texto de <text> (pode ter <sym>, <b>, <font>…): só o texto corrido
 // elisão ("onde‿o"): símbolo lyricsElision, glifo da fonte ScoreText ou caractere de uso privado → espaço
-const textoRico = n => !n ? '' : n.filhos.map(f => f.tag === '#t' ? f.texto : f.tag === 'sym' ? (/elision/i.test(f.texto || '') ? ' ' : '')
+const textoRico = n => !n ? '' : n.filhos.map(f => f.tag === '#t' ? desc(f.texto) : f.tag === 'sym' ? (/elision/i.test(f.texto || '') ? ' ' : '')
   : f.tag === 'font' && /ScoreText/i.test(f.attrs.face || '') ? ' ' : textoRico(f)).join('');
 
 // ---- tempo (MuseScore: 480 por semínima)

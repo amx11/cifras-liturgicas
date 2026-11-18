@@ -122,6 +122,27 @@ function linhaDeAcordes(l) {
   return (rot ? r[0].toUpperCase() + r.slice(1) + ' ' : '') + novo.trim();
 }
 const LIXO = [/^\s*[\[\]]\s*$/, /^A so \|\.\) \[fg/];
+// sinais de repetição estragados pela conversão: ": /" e "/" sozinho no fim fecham; abre sem fechar → fecha no fim
+// do parágrafo; fecha sem abrir → abre no começo do parágrafo
+function repeticoes(cp) {
+  return cp.split(/(\n[ \t]*\n)/).map(par => {
+    if (/^\n/.test(par)) return par;
+    let p = par.replace(/\/::\s*\/\s*:\//g, ':/').replace(/:\s+\/(?=\s*$|\s*\n|\s*\()/gm, ':/');
+    const sinais = () => (p.replace(/\[[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').match(/\/:|:\/|\|:|:\||:\\/g) || []);
+    let s = sinais();
+    if (s.length % 2 === 0) return p;
+    const abre = s.filter(x => x === '/:' || x === '|:').length, fecha = s.length - abre;
+    if (abre > fecha) {
+      // "...aleluia!/" ou "...proclamar./" no fim de uma linha depois do "/:": é o fechamento
+      const ls = p.split('\n');
+      const i = ls.findIndex((l, k) => k >= ls.findIndex(x => /\/:|\|:/.test(x)) && /[^:\s]\s*\/\s*$/.test(l.replace(/\[[^\]]*\]/g, '')));
+      if (i >= 0) { ls[i] = ls[i].replace(/\s*\/(\s*)$/, ':/$1'); return ls.join('\n'); }
+      return p.replace(/\s*$/, ' :/');
+    }
+    // fecha sem abrir: abre no começo da letra do parágrafo (depois de "R." / número)
+    return p.replace(/^(\s*(?:\[[^\]]*\]\s*)*(?:R\s*[.:]+\s*|Refr[ãa]o\s*:?\s*|\d+\s*[.)]\s*)?)/, '$1/: ');
+  }).join('');
+}
 const ehMaiusculas = cp => { const ls = cp.replace(/\[[^\]]*\]/g, '').split('\n').filter(l => /[a-zà-ú]{3}/i.test(l)); return ls.length && ls.filter(l => l === l.toUpperCase()).length / ls.length > 0.5; };
 
 let total = 0;
@@ -160,6 +181,7 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json']) {
       }
     }
     let cp = m.chordpro.split('\n').filter((l, i) => !links.includes(l) && !cabecalhoRepetido.has(i)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(linhaDeAcordes(l)), melisma)))).join('\n');
+    cp = repeticoes(cp);
     if (ehMaiusculas(cp)) cp = minusculas(cp);
     if (cp !== m.chordpro) {
       total++;
