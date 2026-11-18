@@ -189,6 +189,8 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json', 'app/data/can
     }
     let cp = m.chordpro.split('\n').filter((l, i) => !links.includes(l) && !cabecalhoRepetido.has(i)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(linhaDeAcordes(l)), melisma)))).join('\n');
     cp = repeticoes(cp);
+    // pontilhado de alinhamento no meio da letra ("Rei dos ............ céus")
+    cp = cp.replace(/[ \t]*\.{4,}[ \t]*/g, ' ').replace(/[ \t]*(?:\. ){3,}\.?[ \t]*/g, ' ');
     // "/" sozinho no fim do verso (separador de verso que sobrou do PDF)
     cp = cp.split('\n').map(l => /[^:/\s]\s*\/\s*$/.test(l.replace(/\[[^\]]*\]/g, '')) && !/https?:|\/:/.test(l) ? l.replace(/\s*\/(\s*)$/, '$1') : l).join('\n');
     // refrão começando no meio da linha ("...sim. R. Por onde formos...") vai para um parágrafo próprio

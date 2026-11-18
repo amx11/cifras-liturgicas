@@ -64,6 +64,9 @@ export async function carregarAcervo() {
     const r = await fetch('data/adicionadas.json', { cache: 'no-cache' });
     if (r.ok) for (const m of (await r.json()).musicas) estado.base.push({ ...m, chave: 'x' + m.id, origem: 'adicionada' });
   } catch { /* opcional */ }
+  // Versões: grupos de músicas com a mesma letra (refrão e 1ª estrofe iguais), gerados por tools/agrupar-versoes.mjs
+  estado.versoesArq = [];
+  try { const r = await fetch('data/versoes.json', { cache: 'no-cache' }); if (r.ok) estado.versoesArq = (await r.json()).grupos || []; } catch { /* opcional */ }
   // Cifras dos canais do YouTube "Santa Missa Jovem" e "Salmodiai ao nosso Deus" (com o vídeo para ouvir)
   for (const arq of ['data/canal.json', 'data/salmodiai.json']) {
     try {
@@ -227,12 +230,26 @@ function montarIndice() {
   }
   // os grupos por título/texto servem só para a classificação (parte da missa e tempo herdados entre cantos iguais)
   estado.revisaoClassificacao = revisarClassificacao([...estado.grupos.values()]);
-  // Sem versões: cada música é independente, com número próprio (como num cancioneiro), em ordem alfabética.
-  // As músicas só suas ficam no fim, para não mudar a numeração do acervo.
-  estado.grupos = new Map(todas.map(m => { m.grupo = m.chave; m.versao = 1; m.totalVersoes = 1; return [m.chave, [m]]; }));
+  // Versões: músicas com a MESMA LETRA (refrão e 1ª estrofe iguais — data/versoes.json) são uma música só, e cada
+  // arranjo/autor/fonte é uma versão dela; versão personalizada fica junto da música em que foi baseada.
+  // Número (como num cancioneiro): um por música, em ordem alfabética; as versões compartilham o número.
+  const grupoDaChave = new Map();
+  for (const g of estado.versoesArq || []) for (const c of g) grupoDaChave.set(c, g[0]);
+  estado.grupos = new Map();
+  const ordemNoGrupo = new Map((estado.versoesArq || []).flatMap(g => g.map((c, i) => [c, i])));
+  for (const m of todas) {
+    m.grupo = (m.base && (grupoDaChave.get(m.base) || m.base)) || grupoDaChave.get(m.chave) || m.chave;
+    if (!estado.grupos.has(m.grupo)) estado.grupos.set(m.grupo, []);
+    estado.grupos.get(m.grupo).push(m);
+  }
+  for (const vs of estado.grupos.values()) {
+    vs.sort((a, b) => (a.origem === 'minha') - (b.origem === 'minha') || (ordemNoGrupo.get(a.chave) ?? 99) - (ordemNoGrupo.get(b.chave) ?? 99));
+    vs.forEach((m, i) => { m.versao = i + 1; m.totalVersoes = vs.length; m.autor = autorDe(m); });
+  }
   let num = 0;
-  for (const m of todas) if (m.origem !== 'minha') m.num = ++num;
-  for (const m of todas) if (m.origem === 'minha') m.num = ++num;
+  const gs = [...estado.grupos.values()];
+  for (const vs of gs) if (vs.some(m => m.origem !== 'minha')) { num++; vs.forEach(m => { m.num = num; }); }
+  for (const vs of gs) if (!vs[0].num) { num++; vs.forEach(m => { m.num = num; }); }
   estado.musicas = todas;
   estado.porChave = new Map(todas.map(m => [m.chave, m]));
 }
@@ -282,10 +299,46 @@ export function chaveGrupo(nome) {
 export function versoes(m) { return estado.grupos?.get(m.grupo) || [m]; }
 
 // Rótulo curto que diferencia as versões: complemento, autor ou primeira linha de acordes
+// Autor de uma versão: créditos do cabeçalho ("L. e M.: Frei Luiz Turra", "M.: Pe. Weber"), senão o complemento
+// (que nas cifras da arquidiocese costuma trazer o autor), e a fonte (Pasta de Cantos, canal do YouTube)
+const FONTE = { pasta: 'Pasta de Cantos', canal: null, adicionada: null, arquipoa: null };
+const TITULO_PESSOA = /\b(Pe\.?|Padre|Frei|Fr\.|Ir\.|Irmã|D\.|Dom|Pr\.|Maestro|M\.|L\.)\s*[A-ZÀ-Ú]/;
+const NOME_PROPRIO = /\b(?!(?:Hino|Glória|Gloria|Santo|Santa|Cordeiro|Deus|Senhor|Missa|Partes|Salmo|Aleluia|Versão|Canto|Tempo|Domingo|Natal|Páscoa|Ano|Comunhão|Entrada|Ofertório|Aclamação|Sequência|Pentecostes|Advento|Quaresma|Maria|Jesus|Cristo|Espírito|Virgem|Nossa|Rei)\b)[A-ZÀ-Ú][a-zà-ú]+ (?:de |da |dos |do |e )?[A-ZÀ-Ú][a-zà-ú]+/;
+const GRUPO = /\b(gen rosso|cnbb|hin[áa]rio|taiz[ée]|jmj|setor dia do senhor|cantos? da cnbb)\b/i;
+const PESSOA = { test: p => TITULO_PESSOA.test(p) || NOME_PROPRIO.test(p) || GRUPO.test(p) };
+const NAO_AUTOR = /^(entrada|comunh|ofert|oferendas|aclama|final|abertura|salmo|ato penit|gl[óo]ria|santo|cordeiro|\d|vers[ãa]o simplificada|simplificad|coral|uma voz|provis)/i;
+const NOTA = '(?:d[óo]|r[ée]|mi|f[áa]|sol|l[áa]|si)(?:\\s*[#b])?';
+const semTom = t => t
+  .replace(new RegExp(`(?:^|\\s)(?:em\\s+)?${NOTA}\\s*(?:maior|menor)(?![a-zà-ú])(?:\\s*\\(em [A-G][#b]?m?\\))?`, 'gi'), ' ')
+  .replace(new RegExp(`(?:^|\\s)(?:em|tom)\\s+(?:${NOTA}|[A-G][#b]?m?)(?![a-zà-ú#])`, 'gi'), ' ')
+  .replace(/(?:^|\s)[A-G][#b]?(?:M|m)?\s*[-–]\s*/g, ' ').replace(/\s*[-–]\s*$/, '').replace(/^\s*[-–]\s*/, '').replace(/\s+/g, ' ').trim();
+export function autorDe(m) {
+  // 1) créditos do cabeçalho
+  const cred = (m.cabecalho || []).map(l => l.match(/^\s*(?:L\.?\s*(?:e|&)\s*M\.?|M[úu]sica|Letra e m[úu]sica|M\.|Melodia|Autor(?:es)?|Compositor|Arr\.?|Harm\.?)\s*:\s*(.+)$/i)?.[1]).filter(Boolean);
+  let autor = cred.join('; ');
+  // 2) pedaços do título e do complemento que parecem nome de pessoa/grupo ("Pe. Sala", "(D. Pedro Brito)", "Gen Rosso")
+  if (!autor) {
+    const titulo = m.nomeOriginal || m.nome || '';
+    const comp = m.complemento || '';
+    const parenteses = t => (t.match(/\(([^)]+)\)/g) || []).map(p => p.slice(1, -1));
+    // "Moçambique-harm.: Pe. Renato Schuh" → "Pe. Renato Schuh"; "-M. Lindbergh Pires" → "M. Lindbergh Pires"
+    const depoisDoisPontos = p => p.includes(':') ? p.slice(p.lastIndexOf(':') + 1) : p;
+    const pedacos = [...parenteses(titulo), ...parenteses(comp), ...titulo.split(/\s*[-–]\s*(?=(?:M|L|Pe|Fr|D|Ir)\.|Frei|Padre)|\s+[-–]\s+/).slice(1),
+      ...comp.replace(/\([^)]*\)/g, '').split(/\s+[-–·]\s+|\s*\|\s*/)]
+      .map(p => semTom(depoisDoisPontos(p).replace(/^\s*(harm|arr|m|l|vs)\.?\s*:?\s*/i, '').replace(/^\s*(M|L)\.\s*/, ''))).filter(Boolean);
+    autor = pedacos.find(p => PESSOA.test(p) && !NAO_AUTOR.test(p)) || '';
+  }
+  autor = autor.replace(/\s+/g, ' ').replace(/^[(\s]+|[)\s]+$/g, m => (/\(/.test(autor) && /\)/.test(autor) ? m : '')).trim();
+  if ((autor.match(/\(/g) || []).length !== (autor.match(/\)/g) || []).length) autor = autor.replace(/[()]/g, '').trim();
+  const fonte = m.origem === 'canal' ? (m.complemento || '').split(' · ')[0] : FONTE[m.origem];
+  return [autor, fonte && !autor.includes(fonte) ? fonte : ''].filter(Boolean).join(' · ');
+}
+
 export function rotuloVersao(m) {
   const acordes = (m.chordpro || '').match(/\[([^\]]+)\]/g)?.slice(0, 4).map(a => a.slice(1, -1)).join(' ');
-  const desc = m.complemento || m.cabecalho?.find(l => /letra|m[úu]sica|autor|melodia/i.test(l))
-    || (m.nome !== versoes(m)[0]?.nome ? m.nome : '');   // título próprio da versão ("Cordeiro de Deus VII")
+  // autor; sem autor, o título próprio da versão (se diferente) ou o complemento; e o tom
+  const autor = m.autor ?? autorDe(m);
+  const desc = autor || (m.nome !== versoes(m)[0]?.nome ? m.nome : '') || m.complemento || (m.origem === 'arquipoa' ? 'Arquidiocese' : '');
   if (m.personalizada) {
     const dia = m.criada ? new Date(m.criada).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
     return { titulo: `Personalizada${dia ? ' · ' + dia : ''}`, desc: desc === 'Versão personalizada' ? '' : desc, acordes: acordes || '' };
@@ -354,7 +407,16 @@ export function excluirMinha(chave) {
 // pedaço de palavra também vale: "alelu" acha "aleluia"); a frase exata vem primeiro. Se nenhuma música tiver
 // todas as palavras, mostra as que têm mais delas.
 const VAZIAS = new Set(['a', 'o', 'e', 'as', 'os', 'de', 'da', 'do', 'das', 'dos', 'que', 'em', 'no', 'na', 'nos', 'nas', 'um', 'uma', 'se', 'me', 'te', 'ao', 'aos', 'por', 'pra', 'para', 'com']);
-export function buscar({ termo = '', tempo = null, parte = null, ano = null, origem = null } = {}) {
+export function buscar(opcoes = {}) {
+  const lista = buscarTodas(opcoes);
+  if (!opcoes.agrupar) return lista;
+  // uma linha por música (a primeira versão que passou no filtro)
+  const vistos = new Set();
+  const r = lista.filter(m => !vistos.has(m.grupo) && vistos.add(m.grupo));
+  r.parcial = lista.parcial;
+  return r;
+}
+function buscarTodas({ termo = '', tempo = null, parte = null, ano = null, origem = null } = {}) {
   const frase = normalizar(termo);
   let palavras = frase.split(' ').filter(Boolean);
   const chave = palavras.filter(p => !VAZIAS.has(p));
