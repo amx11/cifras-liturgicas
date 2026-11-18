@@ -4,10 +4,12 @@
 // - sílabas separadas por espaço que vieram da partitura: "San to" → "Santo", "Ho sa na" → "Hosana", "Sen hor" → "Senhor";
 // - letra toda em MAIÚSCULAS → normal (início de verso e nomes sagrados em maiúscula);
 // - linha que é só um endereço (link de vídeo colado na cifra) sai da letra; o vídeo do YouTube fica como link da música;
+// - colchete solto, acorde repetido colado ("[D][D]"), texto dentro de colchete que não é acorde ("[Ou Salmo 104]",
+//   "[:/]") e linhas de lixo do OCR;
 // - acorde no meio de uma sílaba ("tig[A]o", "Sen[G]hor") vai para o começo dela ("ti[A]go", "Se[G]nhor").
 // Uso: node tools/limpar-letras.mjs [--sem-salvar] [-v]
 import { readFileSync, writeFileSync } from 'node:fs';
-import { silabasPalavra } from '../app/js/cifra.js';
+import { silabasPalavra, ehAcorde } from '../app/js/cifra.js';
 const RAIZ = new URL('../', import.meta.url).pathname;
 const v = process.argv.includes('-v'), salvar = !process.argv.includes('--sem-salvar');
 
@@ -91,6 +93,20 @@ function encaixar(linha) {
   for (const c of acs.sort((x, y) => x.pos - y.pos || x.n - y.n)) { out += texto.slice(ate, c.pos) + c.a; ate = c.pos; }
   return out + texto.slice(ate);
 }
+// colchetes: o que não é acorde sai do colchete; acorde repetido colado vira um só
+const ROTULO = /^(intro(du[çc][ãa]o)?|final|solo|refr[ãa]o|ponte|bis|\(?\d+\s*x\)?)\s*:?$/i;
+function colchetes(linha) {
+  let l = linha.replace(/\[([^\]]*)\]/g, (todo, dentro) => {
+    const toks = dentro.trim().split(/\s+/).filter(Boolean);
+    if (!toks.length || toks.some(t => ehAcorde(t.replace(/^\(|\)$/g, '')) || /^\?$/.test(t))) return todo;
+    if (/^(\/:|:\/|\|:|:\||[:/|]+)$/.test(dentro.trim())) return dentro.trim();          // sinal de repetição
+    if (ROTULO.test(dentro.trim())) return dentro.trim();
+    return /[A-Za-zÀ-ÿ]{2}/.test(dentro) ? `(${dentro.trim()})` : todo;
+  });
+  for (let ant = null; ant !== l;) { ant = l; l = l.replace(/\[([^\]]+)\](\s*)\[\1\]/g, '[$1]$2'); }
+  return l;
+}
+const LIXO = [/^\s*[\[\]]\s*$/, /^A so \|\.\) \[fg/];
 const ehMaiusculas = cp => { const ls = cp.replace(/\[[^\]]*\]/g, '').split('\n').filter(l => /[a-zà-ú]{3}/i.test(l)); return ls.length && ls.filter(l => l === l.toUpperCase()).length / ls.length > 0.5; };
 
 let total = 0;
@@ -104,7 +120,7 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json']) {
       const yt = l.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/);
       if (yt && !m.youtube) m.youtube = yt[1];
     }
-    let cp = m.chordpro.split('\n').filter(l => !links.includes(l)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').map(l => encaixar(silabasSeparadas(porPalavra(l, melisma)))).join('\n');
+    let cp = m.chordpro.split('\n').filter(l => !links.includes(l)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(l), melisma)))).join('\n');
     if (ehMaiusculas(cp)) cp = minusculas(cp);
     if (cp !== m.chordpro) {
       total++;
