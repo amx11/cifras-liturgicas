@@ -102,24 +102,27 @@ export function segmentos(linha) {
   return segs.filter((s, i) => i > 0 || s.acorde || s.texto);
 }
 
-// Repetição: em cada sinal que FECHA um trecho repetido (/: … :/, |: … :|) garante o "(2x)" logo depois,
-// para o músico ver no fim da frase quantas vezes repetir. Sinais abrem e fecham alternadamente.
+// Repetição: os sinais /: … :/ (e |: … :|) não aparecem; no lugar do sinal que FECHA o trecho fica "(2x)", no fim da
+// frase, para o músico ver quantas vezes repetir (se já vier "(3x)" ou "bis", vale o que está escrito).
+// Sinais abrem e fecham alternadamente; ":/" no começo da linha também abre.
 export function marcarRepeticoes(texto) {
   const jaTemVezes = /^\s*\.?\s*(\(?\s*\d+\s*x\b|bis\b)/i;
   return texto.split(/(\n[ \t]*\n)/).map(par => {
     let aberto = false;
-    return par.replace(/(\[[^\]]*\]|[a-z]+:\/\/\S*)|(\/:|:\/|\|:|:\||:\\)/gi, (todo, ignorar, sinal, pos, s) => {
+    const r = par.replace(/(\[[^\]]*\]|[a-z]+:\/\/\S*)|\s*(\/:|:\/|\|:|:\||:\\)\s*/gi, (todo, ignorar, sinal, pos, s) => {
       if (ignorar) return todo;                                  // acorde ou endereço (https://)
-      if (sinal === '/:' || sinal === '|:') { aberto = true; return todo; }
+      const fimLinha = s.indexOf('\n', pos);
       const inicioLinha = s.lastIndexOf('\n', pos - 1) + 1;
       const antes = s.slice(inicioLinha, pos).replace(/\[[^\]]*\]/g, '');
-      if (sinal === ':/' && !aberto && !antes.trim()) { aberto = true; return todo; }   // ":/" abrindo no começo da linha
-      aberto = false;
-      const fimLinha = s.indexOf('\n', pos); 
       const depois = s.slice(pos + todo.length, fimLinha < 0 ? undefined : fimLinha).replace(/\[[^\]]*\]/g, '');
-      if (jaTemVezes.test(depois) || /\(\s*\d+\s*x\s*\)\s*\.?\s*$/i.test(antes) || /\bbis\s*$/i.test(antes)) return todo;
-      return todo + ' (2x)';
+      const espaco = antes.trim() && depois.trim() ? ' ' : '';
+      if (sinal === '/:' || sinal === '|:' || (sinal === ':/' && !aberto && !antes.trim())) { aberto = true; return espaco; }
+      if (!aberto) return espaco;                                // fecha sem ter aberto: só some
+      aberto = false;
+      if (jaTemVezes.test(depois) || /\(\s*\d+\s*x\s*\)\s*\.?\s*$/i.test(antes) || /\bbis\s*$/i.test(antes)) return espaco || (depois.trim() ? ' ' : '');
+      return ' (2x)' + (depois.trim() ? ' ' : '');
     });
+    return r;
   }).join('');
 }
 
