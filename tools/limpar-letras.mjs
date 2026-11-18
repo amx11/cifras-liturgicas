@@ -127,7 +127,8 @@ const LIXO = [/^\s*[\[\]]\s*$/, /^A so \|\.\) \[fg/];
 function repeticoes(cp) {
   return cp.split(/(\n[ \t]*\n)/).map(par => {
     if (/^\n/.test(par)) return par;
-    let p = par.replace(/\/::\s*\/\s*:\//g, ':/').replace(/:\s+\/(?=\s*$|\s*\n|\s*\()/gm, ':/');
+    let p = par.replace(/\/((?:\[[^\]]*\])+):/g, '/:$1').replace(/:((?:\[[^\]]*\])+)\//g, ':/$1')   // acorde caído dentro do sinal: "/[F]:"
+      .replace(/\/::\s*\/\s*:\//g, ':/').replace(/:\s+\/(?=\s*$|\s*\n|\s*\()/gm, ':/');
     const sinais = () => (p.replace(/\[[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').match(/\/:|:\/|\|:|:\||:\\/g) || []);
     let s = sinais();
     if (s.length % 2 === 0) return p;
