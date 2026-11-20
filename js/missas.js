@@ -6,12 +6,13 @@ import { chordproNoTom } from './cifra.js';
 import { exportarMissa } from './exportar.js';
 import { listarFolhetos, folhetoDaData, arquivosDoFolheto, sincronizarFolhetos, removerFolheto, folhetosCompartilhados, QR_ARQUIDIOCESE } from './folheto.js';
 import { desenharPDF } from './visualizar-pdf.js';
+import { ORACOES, nomeOracao, urlOracao } from './oracoes.js';
 
 // Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
 const ROTEIRO = [
   ['Entrada', 4], ['Ato penitencial', 5], ['Glória', 1], ['Salmo responsorial', 6], ['Aclamação ao Evangelho', 3],
-  ['Apresentação das oferendas', 10], ['Santo', 2],
-  ['Prece eucarística: aclamação memorial', 20], ['Prece eucarística: doxologia e Amém', 20], ['Cordeiro de Deus', 15], ['Comunhão', 16],
+  ['Apresentação das oferendas', 10], ['Oração Eucarística', 20, 'oe'], ['Santo', 2],
+  ['Oração eucarística: aclamação memorial', 20], ['Oração eucarística: doxologia e Amém', 20], ['Cordeiro de Deus', 15], ['Comunhão', 16],
   ['Ação de graças', 18], ['Canto a Maria', 90], ['Final', 18],
 ];
 
@@ -156,11 +157,11 @@ function tomDoTexto(t) {
 // parte da missa de cada canto do repertório: pelo texto do site (Entrada, Oferendas…) e, se não disser, pela classificação do canto
 const CANTO_MARIANO = /\b(maria|nossa senhora|virgem|ave|magnificat|salve,? rainha|mae de deus|imaculada|aparecida)\b/;
 const ROTULO_PARTE = { 4: 'Entrada', 5: 'Ato penitencial', 1: 'Glória', 6: 'Salmo responsorial', 3: 'Aclamação ao Evangelho',
-  10: 'Apresentação das oferendas', 2: 'Santo', 20: 'Prece eucarística', 15: 'Cordeiro de Deus', 16: 'Comunhão', 90: 'Canto a Maria', 18: 'Outro canto', 19: 'Presidência e assembleia' };
+  10: 'Apresentação das oferendas', 2: 'Santo', 20: 'Oração eucarística', 15: 'Cordeiro de Deus', 16: 'Comunhão', 90: 'Canto a Maria', 18: 'Outro canto', 19: 'Presidência e assembleia' };
 function parteDoCanto(texto, m) {
   const t = texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  if (/aclamacao memorial|memorial|todas as vezes|anunciamos/.test(t)) return ['Prece eucarística: aclamação memorial', 20];
-  if (/doxologia/.test(t)) return ['Prece eucarística: doxologia e Amém', 20];
+  if (/aclamacao memorial|memorial|todas as vezes|anunciamos/.test(t)) return ['Oração eucarística: aclamação memorial', 20];
+  if (/doxologia/.test(t)) return ['Oração eucarística: doxologia e Amém', 20];
   if (/\bentrada\b/.test(t)) return ['Entrada', 4];
   if (/oferend|ofertorio/.test(t)) return ['Apresentação das oferendas', 10];
   if (/comunhao/.test(t)) return ['Comunhão', 16];
@@ -190,7 +191,18 @@ export function itensDoRepertorio(rep) {
     const tom = tomDoTexto(c.texto);
     itens.push({ rotulo: cont[rotulo] > 1 ? `${rotulo} (${cont[rotulo]})` : rotulo, parte, chave: m.chave, tom: tom && tom !== m.tom ? tom : null });
   }
-  return { itens, fora };
+  return { itens: comOracao(itens), fora };
+}
+// missas já montadas com Santo/aclamações ganham o item da Oração Eucarística (vazio, para escolher)
+for (const x of estado.missas) if (x.itens?.some(it => it.parte === 2 || it.parte === 20)) comOracao(x.itens);
+// a Oração Eucarística (texto) entra antes do Santo (ou das aclamações dela / do Cordeiro), se ainda não houver
+export function comOracao(itens) {
+  if (itens.some(it => it.tipo === 'oe')) return itens;
+  let k = itens.findIndex(it => it.parte === 2);
+  if (k < 0) k = itens.findIndex(it => it.parte === 20);
+  if (k < 0) k = itens.findIndex(it => it.parte === 15 || it.parte === 16);
+  itens.splice(k < 0 ? itens.length : k, 0, { rotulo: 'Oração Eucarística', parte: 20, tipo: 'oe', oe: null, chave: null, tom: null });
+  return itens;
 }
 
 // ---------- Folheto "O Dia do Senhor" (guardado no aparelho) ----------
@@ -214,6 +226,7 @@ export const ehDoFolheto = (m, nums) => !!m && versoes(m).some(v => v.origem ===
 export function aplicarFolheto(itens, fol) {
   const marcados = new Set();
   let novos = 0;
+  if (fol.oe) { comOracao(itens); const oe = itens.find(it => it.tipo === 'oe'); if (oe && oe.oe !== fol.oe) { oe.oe = fol.oe; novos++; } }
   for (const c of fol.cantos) {
     const m = musicaDoNumero(c.num);
     if (!m) continue;
@@ -246,7 +259,7 @@ const dataCurta = d => new Date(d + 'T12:00').toLocaleDateString('pt-BR', { day:
 // Botão "Folheto" (abre dentro do app, como o vídeo) e cantos do folheto; alvo = elemento onde desenhar
 function cartaoFolheto(fol, x) {
   const cantos = x ? cantosDoFolhetoNaMissa(x, fol) : fol.cantos.map(c => { const m = musicaDoNumero(c.num); return { ...c, m, parte: parteDoFolheto(c, m) }; });
-  const faltam = x ? cantos.filter(c => c.m && !c.naMissa).length : 0;
+  const faltam = x ? cantos.filter(c => c.m && !c.naMissa).length + (fol.oe && !x.itens.some(it => it.tipo === 'oe' && it.oe === fol.oe) ? 1 : 0) : 0;
   return `<div class="cartao folheto-cartao" data-folheto="${esc(fol.data)}">
     <div class="barra" style="margin:0;justify-content:space-between;align-items:center">
       <div><b>📄 Folheto O Dia do Senhor</b> · ${esc(fol.titulo)} <span class="pequeno suave">(${esc(dataCurta(fol.data))})</span></div>
@@ -255,6 +268,7 @@ function cartaoFolheto(fol, x) {
         ${faltam ? `<button class="btn peq" data-folheto-acao="por">Pôr na missa os ${faltam} que faltam</button>` : ''}
         ${x ? '' : `<button class="btn peq" data-folheto-acao="missa">Montar a missa</button><button class="btn peq perigo" data-folheto-acao="remover" title="Tirar do aparelho">✕</button>`}
       </div></div>
+    ${fol.oe ? `<div class="pequeno" style="margin-top:.4em"><b>${esc(nomeOracao(fol.oe))}</b>${x && !x.itens.some(it => it.tipo === 'oe' && it.oe === fol.oe) ? ' <span class="suave">(fora da missa)</span>' : x ? ' ✓' : ''}</div>` : ''}
     <div class="pequeno" style="margin-top:.4em">${cantos.length ? cantos.map(c => `<span class="folheto-canto${x && !c.naMissa ? ' falta' : ''}">nº ${c.num}${c.m ? ` ${c.m.chave ? `<a href="#/musica/${esc(c.m.chave)}">${esc(c.m.nome)}</a>` : ''}` : ' (não está no acervo)'}${c.parte && ROTULO_PARTE[c.parte] ? ` <span class="suave">· ${esc(ROTULO_PARTE[c.parte])}</span>` : ''}${x ? (c.naMissa ? ' ✓' : c.m ? ' <span class="suave">(fora da missa)</span>' : '') : ''}</span>`).join('') : '<span class="suave">Não achei cantos indicados neste folheto.</span>'}</div>
     <div class="folheto-paginas" hidden></div>
   </div>`;
@@ -311,7 +325,7 @@ export async function missaDaData(data) {
   const r = repertorioDaData(reps, data);
   const d = new Date(data + 'T12:00');
   x = { id: novoId(), titulo: r?.nome || fol?.titulo || 'Missa', data: r?.data || data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r?.id,
-    itens: r ? itensDoRepertorio(r).itens : ROTEIRO.map(([rotulo, parte]) => ({ rotulo, parte, chave: null, tom: null })) };
+    itens: r ? itensDoRepertorio(r).itens : ROTEIRO.map(([rotulo, parte, tipo]) => ({ rotulo, parte, chave: null, tom: null, ...(tipo ? { tipo } : {}) })) };
   if (fol) aplicarFolheto(x.itens, fol);
   estado.missas.push(x);
   if (r) estado.prefs.missasAutomaticas = [...(estado.prefs.missasAutomaticas || []), r.id].slice(-60);
@@ -462,7 +476,7 @@ export function novaMissa(aoCriar, { data: dataInicial } = {}) {
     const rep = reps.find(x => String(x.id) === f.rep.value);
     const missa = { id: novoId(), titulo: f.titulo.value.trim() || 'Missa', data: f.data.value, tempo: +f.tempo.value || null,
       ano: +f.ano.value || null, repertorio: rep ? rep.id : undefined,
-      itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? ROTEIRO.map(([rotulo, parte]) => ({ rotulo, parte, chave: null, tom: null })) : [] };
+      itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? ROTEIRO.map(([rotulo, parte, tipo]) => ({ rotulo, parte, chave: null, tom: null, ...(tipo ? { tipo } : {}) })) : [] };
     const fol = folhetoDoForm();
     if (fol) aplicarFolheto(missa.itens, fol);
     estado.missas.push(missa); estado.prefs.missaAtiva = missa.id; salvarPrefs(); foco.idx = null; salvar(); fechar();
@@ -514,6 +528,18 @@ export function telaMissa(tela, id, modo) {
 
   if (modo === 'montar') {
     corpo.innerHTML = x.itens.map((it, i) => {
+      if (it.tipo === 'oe') return `<div class="cartao missa-slot" data-i="${i}">
+        <div class="info" style="flex:1;min-width:0">
+          <div class="parte">${esc(it.rotulo || 'Oração Eucarística')}</div>
+          <select data-acao="oe" aria-label="Qual Oração Eucarística"><option value="">— escolher a oração —</option>${ORACOES.map(([k, v]) => `<option value="${k}" ${it.oe === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
+          ${it.oe ? `<div class="pequeno" style="margin-top:.3em"><button class="link-versao" data-acao="ver-oe">Ver o texto ▾</button></div>` : ''}
+          <div class="oe-texto" hidden></div>
+        </div>
+        <div class="acoes">
+          <button class="btn peq" data-acao="subir" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="btn peq" data-acao="descer" title="Descer" ${i === x.itens.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn peq perigo" data-acao="remover" title="Remover">✕</button>
+        </div></div>`;
       const m = it.chave && musica(it.chave);
       return `<div class="cartao missa-slot" data-i="${i}">
         <div class="info" style="flex:1;min-width:0">
@@ -532,10 +558,17 @@ export function telaMissa(tela, id, modo) {
         </div></div>`;
     }).join('') + `<button class="btn" id="add-parte">✚ Adicionar parte</button>`;
 
+    corpo.addEventListener('change', e => {
+      if (e.target.dataset.acao !== 'oe') return;
+      x.itens[+e.target.closest('[data-i]').dataset.i].oe = e.target.value || null;
+      salvar(); redesenhar();
+    });
     corpo.addEventListener('click', async e => {
       const b = e.target.closest('[data-acao]'); if (!b) return;
       const i = +b.closest('[data-i]').dataset.i;
       const it = x.itens[i];
+      if (b.dataset.acao === 'oe') return;
+      if (b.dataset.acao === 'ver-oe') return mostrarOracao(b, b.closest('.missa-slot').querySelector('.oe-texto'), it.oe);
       if (b.dataset.acao === 'trocar') return escolherCanto(x, it, () => { salvar(); redesenhar(); });
       if (b.dataset.acao === 'versao') {
         const { el, fechar } = modal(`<div class="barra" style="justify-content:space-between;margin-top:0"><b>${esc(musica(it.chave).nome)}</b><button class="btn peq" data-fechar>Fechar</button></div><div id="v"></div>`);
@@ -564,6 +597,7 @@ export function telaMissa(tela, id, modo) {
         <div class="barra" style="justify-content:flex-end"><button class="btn" data-fechar>Cancelar</button><button class="btn primario" id="ok">Adicionar</button></div>`);
       el.querySelector('#par').onchange = e => { if (e.target.value) el.querySelector('#rot').value = tx.partes[e.target.value].split(' / ')[0]; };
       el.querySelector('#ok').onclick = () => {
+        if (el.querySelector('#rot').value.trim().toLowerCase() === 'oração eucarística') { const oe = comOracao(x.itens).find(it => it.tipo === 'oe'); salvar(); fechar(); redesenhar(); return oe; }
         x.itens.push({ rotulo: el.querySelector('#rot').value.trim() || 'Canto', parte: +el.querySelector('#par').value || null, chave: null, tom: null });
         salvar(); fechar(); redesenhar();
       };
@@ -579,6 +613,15 @@ export function telaMissa(tela, id, modo) {
     corpo.append(indice);
     let n = 0;
     for (const it of x.itens) {
+      if (it.tipo === 'oe' && it.oe) {
+        const sec = document.createElement('section');
+        sec.className = 'missa-cancao nao-imprimir';
+        sec.innerHTML = `<div class="parte pequeno suave" style="text-transform:uppercase;letter-spacing:.04em">${esc(it.rotulo || 'Oração Eucarística')}</div>
+          <h2>${esc(nomeOracao(it.oe))}</h2><button class="btn peq" data-ver-oe>Ver o texto ▾</button><div class="oe-texto" hidden></div>`;
+        sec.querySelector('[data-ver-oe]').onclick = e => mostrarOracao(e.currentTarget, sec.querySelector('.oe-texto'), it.oe);
+        corpo.append(sec);
+        continue;
+      }
       const m = it.chave && musica(it.chave);
       if (!m) continue;
       const sec = document.createElement('section');
@@ -609,6 +652,7 @@ export function telaMissa(tela, id, modo) {
     for (const it of x.itens) {
       const m = it.chave && musica(it.chave);
       if (m) linhas.push(`${it.rotulo}: ${m.nome}${(it.tom || m.tom) ? ` (${it.tom || m.tom})` : ''}`);
+      else if (it.tipo === 'oe' && it.oe) linhas.push(`${it.rotulo || 'Oração Eucarística'}: ${nomeOracao(it.oe)}`);
     }
     const texto = linhas.join('\n');
     try {
@@ -642,6 +686,17 @@ export function telaMissa(tela, id, modo) {
     if (!(await confirmar(`Excluir a missa “${x.titulo}”?`, 'Excluir'))) return;
     estado.missas = estado.missas.filter(y => y.id !== id); if (estado.prefs.missaAtiva === id) { estado.prefs.missaAtiva = null; salvarPrefs(); } salvar(); location.hash = '#/missas';
   };
+}
+
+// Texto da Oração Eucarística dentro do app (página do Católico Orante, já na oração), como o vídeo
+function mostrarOracao(botao, alvo, id) {
+  alvo.hidden = !alvo.hidden;
+  botao.textContent = alvo.hidden ? 'Ver o texto ▾' : 'Fechar o texto ▴';
+  if (!alvo.hidden && alvo.dataset.oe !== id) {
+    alvo.dataset.oe = id;
+    alvo.innerHTML = `<iframe class="oe-quadro" src="${esc(urlOracao(id))}" title="${esc(nomeOracao(id))}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <div class="pequeno suave">Texto do <a href="${esc(urlOracao(id))}" target="_blank" rel="noopener">Católico Orante ↗</a> (sem internet não abre).</div>`;
+  }
 }
 
 // Escolher o canto de uma parte: já filtra pelo tempo da missa e pela parte, em ordem alfabética

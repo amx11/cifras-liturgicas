@@ -28,6 +28,8 @@ export const estado = {
   tons: ler(CHAVES.tons, {}),
   missas: ler(CHAVES.missas, []),
 };
+// nome certo da parte: Oração Eucarística (missas montadas antes diziam "Prece eucarística")
+for (const x of estado.missas) for (const it of x.itens || []) if (/^prece eucar[íi]stica/i.test(it.rotulo || '')) it.rotulo = it.rotulo.replace(/^prece eucar[íi]stica/i, 'Oração eucarística');
 
 export function salvarPrefs() { gravar(CHAVES.prefs, estado.prefs); }
 export function salvarTons() { gravar(CHAVES.tons, estado.tons); }
@@ -39,7 +41,7 @@ export async function carregarAcervo() {
     const r = await fetch('data/musicas.json', { cache: 'no-cache' });
     if (r.ok) dados = await r.json();
   } catch { /* sem acervo: segue só com as músicas próprias */ }
-  estado.taxonomia = { tempos: dados.tempos || {}, partes: { ...(dados.partes || {}), 2: 'Santo', 20: 'Prece Eucarística', 90: 'Canto a Maria' }, categorias: dados.categorias || {}, anos: dados.anos || {} };
+  estado.taxonomia = { tempos: dados.tempos || {}, partes: { ...(dados.partes || {}), 2: 'Santo', 20: 'Oração Eucarística', 90: 'Canto a Maria' }, categorias: dados.categorias || {}, anos: dados.anos || {} };
   estado.fonte = dados.fonte;
   estado.atualizado = dados.atualizado;
   // Correções revisadas (gravadas pelo servidor local em data/correcoes.json) valem para todos os aparelhos
