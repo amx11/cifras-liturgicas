@@ -70,7 +70,7 @@ function dividir(linhas, max) {
   for (let i = 0; i < linhas.length; i += tam) out.push(linhas.slice(i, i + tam));
   return out;
 }
-export function slidesDaMissa(x, { titulos = true, repetirRefrao = true, maxLinhas = 6, soPrimeira = true } = {}) {
+export function slidesDaMissa(x, { titulos = true, repetirRefrao = true, maxLinhas = 6, soPrimeira = true, escuro = true } = {}) {
   const slides = [];
   const data = x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
   if (titulos) slides.push({ tipo: 'capa', titulo: x.titulo, sub: data });
@@ -90,6 +90,7 @@ export function slidesDaMissa(x, { titulos = true, repetirRefrao = true, maxLinh
       if (repetirRefrao && refrao && !p.refrao && !pars[i + 1]?.refrao && pars.indexOf(refrao) < i) ordem.push(refrao);
     });
     for (const p of ordem) for (const linhas of dividir(p.linhas, maxLinhas)) slides.push({ tipo: 'letra', linhas, refrao: p.refrao, parte, titulo: m.nome });
+    if (escuro) slides.push({ tipo: 'vazio' });          // tela preta depois de cada canto (inclusive a Entrada)
   }
   return slides;
 }
@@ -103,6 +104,7 @@ export function apresentacaoMissa(x) {
     <p class="pequeno suave">Só a letra, para o telão: ${n} ${n === 1 ? 'canto' : 'cantos'}, um slide por estrofe e por refrão.</p>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="ti" checked> Slide com o nome de cada canto (e capa da missa)</label>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="rr" checked> Repetir o refrão depois de cada estrofe</label>
+    <label style="display:block;margin:6px 0"><input type="checkbox" id="es" checked> Slide escuro (tela preta) depois de cada canto</label>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="sp" checked> Só a 1ª opção de cada parte (pula “Glória (2)”, “Santo (2)”…)</label>
     <label style="display:block;margin:6px 0">Linhas por slide: <select id="ml"><option>4</option><option>5</option><option selected>6</option><option>8</option></select></label>
     <label style="display:block;margin:6px 0">Cores: <select id="tema"><option value="escuro" selected>letra branca, fundo preto</option><option value="claro">letra preta, fundo branco</option><option value="azul">letra branca, fundo azul</option></select></label>
@@ -113,7 +115,7 @@ export function apresentacaoMissa(x) {
       <button class="btn" data-fechar>Fechar</button>
     </div>
     <p id="msg" class="pequeno suave">No telão: toque/clique ou use as setas para passar; Esc para sair; B deixa a tela preta.</p>`);
-  const opcoes = () => ({ titulos: el.querySelector('#ti').checked, repetirRefrao: el.querySelector('#rr').checked, maxLinhas: +el.querySelector('#ml').value, soPrimeira: el.querySelector('#sp').checked });
+  const opcoes = () => ({ titulos: el.querySelector('#ti').checked, repetirRefrao: el.querySelector('#rr').checked, maxLinhas: +el.querySelector('#ml').value, soPrimeira: el.querySelector('#sp').checked, escuro: el.querySelector('#es').checked });
   const tema = () => TEMAS[el.querySelector('#tema').value];
   const msg = el.querySelector('#msg');
   const nomeArq = ext => `${(x.titulo || 'missa').replace(/[\\/:*?"<>|]+/g, '-')}${x.data ? ' ' + x.data : ''} - apresentacao.${ext}`;
@@ -150,7 +152,8 @@ export function apresentar(slides, tema = TEMAS.escuro) {
   const desenhar = () => {
     const s = slides[i];
     const W = tela.clientWidth * 0.92, H = tela.clientHeight * 0.86;
-    if (preto) { tela.innerHTML = ''; return; }
+    tela.style.background = '#' + (s.tipo === 'vazio' || preto ? '000000' : tema.fundo);
+    if (preto || s.tipo === 'vazio') { tela.innerHTML = ''; return; }
     let html = '';
     if (s.tipo === 'capa') html = `<div><div style="font-size:${Math.min(W / 14, 72)}px;font-weight:700">${esc(s.titulo)}</div><div style="font-size:${Math.min(W / 30, 34)}px;color:#${tema.suave};margin-top:.6em">${esc(s.sub)}</div></div>`;
     else if (s.tipo === 'titulo') html = `<div><div style="font-size:${Math.min(W / 28, 36)}px;color:#${tema.suave};text-transform:uppercase;letter-spacing:.08em">${esc(s.parte)}</div><div style="font-size:${Math.min(W / 16, 64)}px;font-weight:700;margin-top:.3em">${esc(s.titulo)}</div></div>`;
@@ -207,7 +210,8 @@ export async function gerarPptx(slides, tema, nome, { baixar = true } = {}) {
   p.title = slides[0]?.titulo || 'Missa';
   for (const s of slides) {
     const sl = p.addSlide();
-    sl.background = { color: tema.fundo };
+    sl.background = { color: s.tipo === 'vazio' ? '000000' : tema.fundo };
+    if (s.tipo === 'vazio') continue;
     if (s.tipo === 'capa') {
       sl.addText(s.titulo, { x: 0.4, y: 1.6, w: 9.2, h: 1.4, align: 'center', valign: 'middle', fontSize: 44, bold: true, color: tema.texto, fontFace: 'Arial', fit: 'shrink' });
       if (s.sub) sl.addText(s.sub, { x: 0.4, y: 3.1, w: 9.2, h: 0.6, align: 'center', fontSize: 22, color: tema.suave, fontFace: 'Arial' });
@@ -232,7 +236,8 @@ export async function gerarPdfSlides(slides, tema, nome, { baixar = true } = {})
   const cor = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   slides.forEach((s, k) => {
     if (k) doc.addPage([A, L], 'landscape');
-    doc.setFillColor(...cor(tema.fundo)); doc.rect(0, 0, L, A, 'F');
+    doc.setFillColor(...cor(s.tipo === 'vazio' ? '000000' : tema.fundo)); doc.rect(0, 0, L, A, 'F');
+    if (s.tipo === 'vazio') return;
     const centro = (texto, y, tam, estilo = 'normal', c = tema.texto) => { doc.setFont('helvetica', estilo); doc.setFontSize(tam); doc.setTextColor(...cor(c)); doc.text(texto, L / 2, y, { align: 'center', baseline: 'middle' }); };
     if (s.tipo === 'capa') { centro(s.titulo, A / 2 - 8, 40, 'bold'); if (s.sub) centro(s.sub, A / 2 + 12, 20, 'normal', tema.suave); return; }
     if (s.tipo === 'titulo') { centro(s.parte.toUpperCase(), A / 2 - 14, 20, 'normal', tema.suave); centro(s.titulo, A / 2 + 4, 36, 'bold'); return; }
