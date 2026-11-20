@@ -15,8 +15,11 @@ export function limpar(s) {
 }
 
 export function gerarPDF(JsPDF, missa, opcoes = {}) {
-  const { acordes = true, umaPorPagina = false, grande = false } = opcoes;
+  const { acordes = true, umaPorPagina = false, grande = false, capa = null } = opcoes;
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+  // capa (imagem JPEG da página inteira) na 1ª página; a numeração começa na seguinte
+  if (capa) { doc.addImage(capa, 'JPEG', 0, 0, 210, 297); doc.addPage(); }
+  const pulo = capa ? 1 : 0;
   doc.setProperties({ title: limpar(missa.titulo), creator: 'Cifras Liturgicas' });
   const largUtil = PAG.l - PAG.esq - PAG.dir;
   const limite = PAG.a - PAG.base - 6; // deixa espaço para o rodapé
@@ -128,11 +131,11 @@ export function gerarPDF(JsPDF, missa, opcoes = {}) {
 
   // ----- Rodapé com numeração -----
   const total = doc.getNumberOfPages();
-  for (let p = 1; p <= total; p++) {
+  for (let p = 1 + pulo; p <= total; p++) {
     doc.setPage(p);
     fonte('helvetica', 'normal', 8, cor.suave);
     doc.text(limpar(missa.titulo), PAG.esq, PAG.a - 9);
-    doc.text(`${p} / ${total}`, PAG.l - PAG.dir, PAG.a - 9, { align: 'right' });
+    doc.text(`${p - pulo} / ${total - pulo}`, PAG.l - PAG.dir, PAG.a - 9, { align: 'right' });
   }
   return doc;
 }
