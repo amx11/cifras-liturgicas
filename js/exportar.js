@@ -6,7 +6,7 @@ import { esc, aviso, modal, nomeTempo } from './ui.js';
 import { paginasComoImagens } from './visualizar-pdf.js';
 
 let carregando = null;
-function carregarJsPDF() {
+export function carregarJsPDF() {
   if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
   carregando ||= new Promise((ok, falha) => {
     const s = document.createElement('script');

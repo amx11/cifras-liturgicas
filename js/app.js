@@ -176,7 +176,8 @@ function telaMusicas() {
     filtro.autoParte = marcaParte;
   }
   tela.innerHTML = `
-    <h1>Músicas</h1>
+    <div class="barra" style="justify-content:space-between;align-items:center;margin:0"><h1 style="margin:0">Músicas</h1>
+      <a class="btn primario" href="#/importar" title="Digitar, colar, ou ler de foto, PDF, partitura, áudio ou YouTube">✚ Colocar cifra</a></div>
     ${x ? `<div class="montando"><span>Montando <b>${esc(x.titulo)}</b>${slot ? ` · escolhendo <b>${esc(slot.rotulo)}</b>` : ''}</span>
       <span class="suave">Toque no <b>＋</b> para pôr o canto na missa.</span>
       ${slot ? '<button class="chip" id="sem-foco">Ver todas as partes</button>' : ''}</div>`

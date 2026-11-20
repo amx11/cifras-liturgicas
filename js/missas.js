@@ -503,6 +503,7 @@ export function telaMissa(tela, id, modo) {
       <button class="btn ${modo === 'ler' ? 'primario' : ''}" data-modo="ler">Ver cifras</button>
       <a class="btn primario" href="#/tocar/${x.id}/0" style="background:var(--acorde);border-color:var(--acorde)">▶ Tocar</a>
       <button class="btn primario" id="pdf">⬇ Exportar PDF</button>
+      <button class="btn primario" id="apresentacao" title="Só a letra, para o telão: apresentar, PowerPoint ou PDF">📽 Apresentação</button>
       <button class="btn" id="imprimir">Imprimir</button>
       <button class="btn" id="compartilhar">Compartilhar lista</button>
       <button class="btn" id="dados">Editar dados</button>
@@ -642,6 +643,7 @@ export function telaMissa(tela, id, modo) {
   }
 
   tela.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { sessionStorage.setItem('cl.modoMissa', b.dataset.modo); redesenhar(b.dataset.modo); window.scrollTo(0, 0); });
+  tela.querySelector('#apresentacao').onclick = () => import('./apresentacao.js').then(a => a.apresentacaoMissa(x));
   tela.querySelector('#pdf').onclick = () => exportarMissa(x);
   tela.querySelector('#imprimir').onclick = () => {
     if (modo !== 'ler') { sessionStorage.setItem('cl.modoMissa', 'ler'); redesenhar('ler'); }
@@ -710,7 +712,10 @@ function escolherCanto(x, it, aoEscolher) {
       <select id="t"><option value="">Todos os tempos</option>${ORDEM_TEMPOS.filter(t => tx.tempos[t]).map(t => `<option value="${t}" ${f.tempo === t ? 'selected' : ''}>${esc(tx.tempos[t])}</option>`).join('')}</select>
       <select id="p"><option value="">Todas as partes</option>${Object.entries(tx.partes).map(([k, v]) => `<option value="${k}" ${f.parte === +k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
     </div>
-    ${it.chave ? '<button class="btn peq perigo" id="limpar" style="margin-top:8px">Deixar sem canto</button>' : ''}
+    <div class="barra" style="margin-top:8px">
+      <button class="btn peq primario" id="minha" title="Digitar ou colar uma cifra sua; ela entra nesta parte da missa">✚ Colocar uma cifra minha</button>
+      ${it.chave ? '<button class="btn peq perigo" id="limpar">Deixar sem canto</button>' : ''}
+    </div>
     <p class="pequeno suave" id="n"></p><div id="r"></div>`);
   const desenhar = () => {
     const res = buscar({ termo: f.termo, tempo: f.tempo ?? null, parte: f.parte ?? null, agrupar: true });
@@ -722,6 +727,12 @@ function escolherCanto(x, it, aoEscolher) {
   el.querySelector('#t').onchange = e => { f.tempo = +e.target.value || null; desenhar(); };
   el.querySelector('#p').onchange = e => { f.parte = +e.target.value || null; desenhar(); };
   el.querySelector('#limpar')?.addEventListener('click', () => { it.chave = null; it.tom = null; fechar(); aoEscolher(); });
+  el.querySelector('#minha').addEventListener('click', () => {
+    fechar();
+    const voltar = location.hash || '#/missa/' + x.id;
+    telaEditar(null, { partes: it.parte ? [it.parte] : [], tempos: x.tempo ? [x.tempo] : [] }, {
+      voltar, aposSalvar: ch => { trocarChave(it, ch); salvar(); aviso('Cifra salva e colocada nesta parte da missa'); irPara(voltar); } });
+  });
   el.querySelector('#r').addEventListener('click', e => {
     const a = e.target.closest('[data-chave]'); if (!a) return;
     e.preventDefault();
