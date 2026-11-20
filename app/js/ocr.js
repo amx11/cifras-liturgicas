@@ -62,11 +62,11 @@ export async function encerrarOCR() {
 }
 
 // Foto -> canvas no tamanho ideal, em tons de cinza, com limiar adaptativo (corrige sombra e luz desigual da foto)
-async function fotoParaCanvas(arquivo) {
+async function fotoParaCanvas(arquivo, largura = LARGURA) {
   const bmp = await createImageBitmap(arquivo, { imageOrientation: 'from-image' });
-  const k = LARGURA / bmp.width;
+  const k = largura / bmp.width;
   const cv = document.createElement('canvas');
-  cv.width = LARGURA; cv.height = Math.round(bmp.height * k);
+  cv.width = largura; cv.height = Math.round(bmp.height * k);
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
@@ -132,19 +132,75 @@ export async function lerTextoPdf(dados, progresso = () => {}) {
   if (texto.replace(/\s/g, '').length > 800) return texto;
   progresso('preparando o leitor (a primeira vez demora um pouco)...');
   const paginas = await pdfParaCanvas(dados.slice(0), 1700);   // texto do folheto: basta ~200 dpi (mais rápido)
+  return lerTextoCanvas(paginas, progresso);
+}
+
+// Fotos (folheto de papel fotografado) -> texto corrido
+export async function lerTextoImagens(arquivos, progresso = () => {}) {
+  progresso('preparando o leitor (a primeira vez demora um pouco)...');
+  const paginas = [];
+  for (const a of arquivos) paginas.push(await fotoParaCanvas(a, 1800));
+  return lerTextoCanvas(paginas, progresso);
+}
+async function lerTextoCanvas(paginas, progresso) {
   if (!leitorTexto) {
     const T = await carregarTesseract();
     leitorTexto = await T.createWorker('por', 1, { workerPath: BASE + 'worker.min.js', corePath: BASE + 'core/', langPath: BASE + 'lang', gzip: false, cacheMethod: 'none',
       logger: m => { if (m.status === 'recognizing text') aoProgresso?.(m.progress); } });
   }
-  texto = '';
+  let texto = '';
   try {
     for (let i = 0; i < paginas.length; i++) {
-      aoProgresso = p => progresso(`lendo a página ${i + 1} de ${paginas.length}... ${Math.round(p * 100)}%`);
+      aoProgresso = p => progresso(`lendo ${paginas.length > 1 ? `a página ${i + 1} de ${paginas.length}` : 'a página'}... ${Math.round(p * 100)}%`);
       texto += (await leitorTexto.recognize(paginas[i])).data.text + '\n';
     }
   } finally { aoProgresso = null; }
   return texto;
+}
+// QR codes de fotos ou de PDFs: leitor do próprio navegador (Chrome do Android) e, se não houver ou não achar,
+// o jsQR (vendor/jsQR.js, Apache-2.0) na imagem inteira e no canto de cima (onde fica o QR do folheto)
+let jsQRCarregando = null;
+function carregarJsQR() {
+  if (self.jsQR) return Promise.resolve(self.jsQR);
+  jsQRCarregando ||= new Promise((ok, falha) => {
+    const s = document.createElement('script');
+    s.src = new URL('../vendor/jsQR.js', import.meta.url).href;
+    s.onload = () => ok(self.jsQR);
+    s.onerror = () => { jsQRCarregando = null; falha(new Error('leitor de QR indisponível')); };
+    document.head.append(s);
+  });
+  return jsQRCarregando;
+}
+async function canvasDe(a) {
+  if (!ehImagem(a)) return (await pdfParaCanvas(new Uint8Array(await a.arrayBuffer()), 1400))[0];
+  const bmp = await createImageBitmap(a, { imageOrientation: 'from-image' });
+  const k = Math.min(1, 1600 / bmp.width);
+  const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
+  return cv;
+}
+export async function lerQrCodes(arquivos) {
+  const out = [];
+  for (const a of arquivos) {
+    try {
+      const cv = await canvasDe(a);
+      let achou = false;
+      if ('BarcodeDetector' in self) {
+        try { for (const c of await new BarcodeDetector({ formats: ['qr_code'] }).detect(cv)) { out.push(c.rawValue); achou = true; } } catch { /* segue para o jsQR */ }
+      }
+      if (!achou) {
+        const jsQR = await carregarJsQR();
+        const ctx = cv.getContext('2d', { willReadFrequently: true });
+        // canto de cima à direita (QR do folheto), depois a imagem inteira
+        for (const [x, y, w, h] of [[cv.width * 0.55, 0, cv.width * 0.45, cv.height * 0.3], [0, 0, cv.width, cv.height]]) {
+          const img = ctx.getImageData(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+          const r = jsQR(img.data, img.width, img.height);
+          if (r?.data) { out.push(r.data); break; }
+        }
+      }
+    } catch { /* sem QR nesta imagem */ }
+  }
+  return [...new Set(out)];
 }
 
 export const ehImagem = arq => arq.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|bmp|gif)$/i.test(arq.name);

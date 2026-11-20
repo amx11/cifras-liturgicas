@@ -43,7 +43,8 @@
           "name": "folheto",
           "accept": [
             "application/pdf",
-            ".pdf"
+            ".pdf",
+            "image/*"
           ]
         }
       ]
