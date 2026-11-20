@@ -13,7 +13,7 @@ import { telaTocar, sairTocar } from './tocar.js';
 import { telaOuvir, pararOuvir } from './ouvir.js';
 import { telaAfinador, pararAfinador } from './afinador.js';
 import { telaSumario } from './sumario.js';
-import { INSTRUMENTOS, cartaoAcorde, vozesTeclado } from './instrumentos.js';
+import { INSTRUMENTOS, NIVEIS, cartaoAcorde, prepararAcordes } from './instrumentos.js';
 
 const tela = document.getElementById('tela');
 const TONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -49,6 +49,7 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
           <button class="btn peq" data-semi="-1" title="Meio tom abaixo">−½</button>
           <button class="btn peq" data-semi="1" title="Meio tom acima">+½</button>
           <span class="instrumentos" role="group" aria-label="Ver os acordes no instrumento"><span class="pequeno suave">Acordes no:</span>${INSTRUMENTOS.map(([k, v]) => `<button type="button" class="btn peq${estado.prefs.instrumento === k ? ' primario' : ''}" data-instrumento="${k}" aria-pressed="${estado.prefs.instrumento === k}">${v}</button>`).join('')}${estado.prefs.instrumento ? '<button type="button" class="btn peq" data-instrumento="" title="Ocultar os desenhos dos acordes">✕ Ocultar</button>' : ''}</span>
+          ${estado.prefs.instrumento ? `<span class="instrumentos niveis" role="group" aria-label="Nível">${NIVEIS.map(([k, v]) => `<button type="button" class="btn peq${(estado.prefs.nivel || 'medio') === k ? ' primario' : ''}" data-nivel="${k}" aria-pressed="${(estado.prefs.nivel || 'medio') === k}">${v}</button>`).join('')}</span>` : ''}
           <span class="pequeno suave">Original: <b>${esc(original)}</b>${m.outrosTons?.length ? ` (o PDF da arquidiocese traz também em ${m.outrosTons.map(esc).join(', ')})` : ''}${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
         </div></div>` : ''}
       ${m.chordpro && original && estado.prefs.instrumento ? `<div class="diagramas nao-imprimir" aria-label="Acordes da música no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}"><div class="barra" style="justify-content:space-between;margin:0 0 4px"><b class="pequeno">Acordes no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}</b><button type="button" class="btn peq" data-instrumento="">✕ Ocultar desenhos</button></div>${diagramas(acordesDaMusica(m.chordpro, semi, bemol), estado.prefs.instrumento)}</div>` : ''}
@@ -86,6 +87,7 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
     }
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.nivel) { estado.prefs.nivel = b.dataset.nivel; salvarPrefs(); desenhar(); return; }
     if (b.dataset.instrumento !== undefined) {
       estado.prefs.instrumento = !b.dataset.instrumento || estado.prefs.instrumento === b.dataset.instrumento ? null : b.dataset.instrumento;
       salvarPrefs(); desenhar(); return;
@@ -120,15 +122,25 @@ function acordesDaMusica(chordpro, semi, bemol) {
   }
   return seq;
 }
-// cartões dos acordes; teclado e órgão: inversão escolhida pela ordem da música (perto do acorde anterior)
+// cartões dos acordes no instrumento e no nível escolhidos; o que depende da ordem da música (inversão mais perto do
+// acorde anterior, região do braço, linha da flauta) é calculado pela sequência inteira
+const LEGENDAS = {
+  violao: { simples: 'Simplificado: acorde básico (sem 7ª, 9ª...), sem pestana.', medio: 'Médio: o acorde como está escrito, nas formas mais usadas.', avancado: 'Avançado: o acorde completo, com a mão ficando na mesma região do braço de um acorde para o outro.' },
+  teclado: { simples: '<span class="cor-me">■ mão esquerda: só o baixo</span> <span class="cor-md">■ mão direita: acorde básico (3 notas)</span>', medio: '<span class="cor-me">■ mão esquerda: tônica, 5ª e 8ª</span> <span class="cor-md">■ mão direita: o acorde com a 7ª</span>', avancado: '<span class="cor-me">■ mão esquerda: tônica, 5ª e 10ª</span> <span class="cor-md">■ mão direita: todas as notas escritas (7ª, 9ª, 6ª...)</span>' },
+  orgao: { simples: '<span class="cor-pedal">■ pedal</span> <span class="cor-me">■ mão esquerda: acorde básico</span> · mão direita livre para a melodia', medio: '<span class="cor-pedal">■ pedal</span> <span class="cor-me">■ mão esquerda: acorde com a 7ª</span> · mão direita livre para a melodia', avancado: '<span class="cor-pedal">■ pedal</span> <span class="cor-me">■ mão esquerda: acorde</span> <span class="cor-md">■ mão direita: o mesmo acorde uma oitava acima (som cheio)</span>' },
+  flauta: { simples: 'Simplificado: uma nota por acorde, a mais perto da anterior (contracanto). ', medio: 'Médio: arpejo do acorde básico (1-3-5). ', avancado: 'Avançado: arpejo completo (7ª, 9ª...) e a oitava. ' },
+};
+LEGENDAS.transversal = LEGENDAS.flauta;
+const DIGITACOES = {
+  flauta: 'Flauta doce soprano, digitação barroca: ● tapado ○ aberto ◐ meio; o 1º furo é o do polegar (atrás).',
+  transversal: 'Flauta transversal (sistema Boehm): ● apertado ○ solto. De cima para baixo: polegar (à esquerda), 3 dedos da mão esquerda, chave de Sol# (mindinho esquerdo), 3 dedos da mão direita, chave de Mi♭ (mindinho direito) e, embaixo, as chaves do pé (Dó# e Dó). Na 2ª oitava a posição é a mesma, soprando mais — menos Ré e Mi♭, que levantam o 1º dedo.',
+};
 function diagramas(seq, instrumento, so = null) {
-  const vozes = instrumento === 'teclado' || instrumento === 'orgao' ? vozesTeclado(seq, instrumento) : null;
+  const nivel = estado.prefs.nivel || 'medio';
+  const ctx = prepararAcordes(seq, instrumento, nivel);
   const distintos = so ? [so] : [...new Set(seq)];
-  const legenda = instrumento === 'teclado' ? '<div class="pequeno suave legenda-cores"><span class="cor-me">■ mão esquerda (tônica, 5ª e 8ª; com baixo trocado, baixo e 8ª — se preferir, só a nota de baixo)</span> <span class="cor-md">■ mão direita (inversão mais perto do acorde anterior)</span></div>'
-    : instrumento === 'orgao' ? '<div class="pequeno suave legenda-cores"><span class="cor-pedal">■ pedal</span> <span class="cor-me">■ mão esquerda (acorde)</span> · mão direita livre para a melodia</div>'
-    : instrumento === 'flauta' ? '<div class="pequeno suave legenda-cores">Flauta doce soprano, digitação barroca: ● tapado ○ aberto ◐ meio; o 1º furo é o do polegar (atrás).</div>'
-    : instrumento === 'transversal' ? '<div class="pequeno suave legenda-cores">Flauta transversal (sistema Boehm): ● apertado ○ solto. De cima para baixo: polegar (à esquerda), 3 dedos da mão esquerda, chave de Sol# (mindinho esquerdo), 3 dedos da mão direita, chave de Mi♭ (mindinho direito) e, embaixo, as chaves do pé (Dó# e Dó). Na 2ª oitava a posição é a mesma, soprando mais — menos Ré e Mi♭, que levantam o 1º dedo.</div>' : '';
-  return `${legenda}<div class="lista-acordes">${distintos.map(n => cartaoAcorde(n, instrumento, vozes)).join('')}</div>`;
+  const legenda = `<div class="pequeno suave legenda-cores">${LEGENDAS[instrumento]?.[nivel] || ''}${DIGITACOES[instrumento] || ''}</div>`;
+  return `${legenda}<div class="lista-acordes">${distintos.map(n => cartaoAcorde(n, instrumento, ctx)).join('')}</div>`;
 }
 
 // Sugestão de capotraste: formas fáceis (C, G, D, A, E / Am, Em, Dm) com capotraste até a 5ª casa
