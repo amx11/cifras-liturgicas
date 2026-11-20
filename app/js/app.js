@@ -5,7 +5,7 @@ import { renderizarHTML, renderizarTexto, semitonsEntre, preferirBemol, transpor
   ehLinhaDeAcordes, chordproNoTom } from './cifra.js';
 import { esc, aviso, modal, confirmar, ORDEM_TEMPOS, ORDEM_PARTES, COR_TEMPO, nomeTempo, nomeParte,
   listaAlfabetica, itemMusica, baixarArquivo, irPara } from './ui.js';
-import { telaMissas, telaMissa, escolherMissaPara, missaAtiva, foco, definirFoco, adicionarComAviso, listaVersoes, novaMissa } from './missas.js';
+import { telaMissas, telaMissa, escolherMissaPara, missaAtiva, foco, definirFoco, adicionarComAviso, listaVersoes, novaMissa, missaAutomatica } from './missas.js';
 import { iniciarPainel, abrirPainel } from './painel.js';
 import { desenharPDF } from './visualizar-pdf.js';
 import { telaImportar } from './importar.js';
@@ -550,4 +550,15 @@ tela.innerHTML = '<p class="vazio">Carregando acervo...</p>';
 await carregarAcervo();
 iniciarPainel();
 rotear();
+// missa do dia/fim de semana montada sozinha pela data (ao abrir e ao voltar para o app num outro dia)
+const automatica = () => missaAutomatica().then(m => {
+  if (!m) return;
+  window.dispatchEvent(new Event('missa-mudou'));
+  if (location.hash === '#/missas') telaMissas(tela);
+}).catch(() => {});
+automatica();
+let diaVisto = new Date().toDateString();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && new Date().toDateString() !== diaVisto) { diaVisto = new Date().toDateString(); automatica(); }
+});
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
