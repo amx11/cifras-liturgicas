@@ -8,7 +8,8 @@ import { exportarMissa } from './exportar.js';
 // Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
 const ROTEIRO = [
   ['Entrada', 4], ['Ato penitencial', 5], ['Glória', 1], ['Salmo responsorial', 6], ['Aclamação ao Evangelho', 3],
-  ['Apresentação das oferendas', 10], ['Santo', 2], ['Cordeiro de Deus', 15], ['Comunhão', 16],
+  ['Apresentação das oferendas', 10], ['Santo', 2],
+  ['Prece eucarística: aclamação memorial', 20], ['Prece eucarística: doxologia e Amém', 20], ['Cordeiro de Deus', 15], ['Comunhão', 16],
   ['Ação de graças', 18], ['Canto a Maria', 90], ['Final', 18],
 ];
 
@@ -153,11 +154,11 @@ function tomDoTexto(t) {
 // parte da missa de cada canto do repertório: pelo texto do site (Entrada, Oferendas…) e, se não disser, pela classificação do canto
 const CANTO_MARIANO = /\b(maria|nossa senhora|virgem|ave|magnificat|salve,? rainha|mae de deus|imaculada|aparecida)\b/;
 const ROTULO_PARTE = { 4: 'Entrada', 5: 'Ato penitencial', 1: 'Glória', 6: 'Salmo responsorial', 3: 'Aclamação ao Evangelho',
-  10: 'Apresentação das oferendas', 2: 'Santo', 15: 'Cordeiro de Deus', 16: 'Comunhão', 90: 'Canto a Maria', 18: 'Outro canto', 19: 'Presidência e assembleia' };
+  10: 'Apresentação das oferendas', 2: 'Santo', 20: 'Prece eucarística', 15: 'Cordeiro de Deus', 16: 'Comunhão', 90: 'Canto a Maria', 18: 'Outro canto', 19: 'Presidência e assembleia' };
 function parteDoCanto(texto, m) {
   const t = texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  if (/aclamacao memorial|memorial|todas as vezes|anunciamos/.test(t)) return ['Aclamação memorial', 19];
-  if (/doxologia/.test(t)) return ['Doxologia', 19];
+  if (/aclamacao memorial|memorial|todas as vezes|anunciamos/.test(t)) return ['Prece eucarística: aclamação memorial', 20];
+  if (/doxologia/.test(t)) return ['Prece eucarística: doxologia e Amém', 20];
   if (/\bentrada\b/.test(t)) return ['Entrada', 4];
   if (/oferend|ofertorio/.test(t)) return ['Apresentação das oferendas', 10];
   if (/comunhao/.test(t)) return ['Comunhão', 16];
