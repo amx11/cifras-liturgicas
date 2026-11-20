@@ -70,7 +70,7 @@ function dividir(linhas, max) {
   for (let i = 0; i < linhas.length; i += tam) out.push(linhas.slice(i, i + tam));
   return out;
 }
-export function slidesDaMissa(x, { titulos = true, repetirRefrao = true, maxLinhas = 6, soPrimeira = true, escuro = true } = {}) {
+export function slidesDaMissa(x, { titulos = false, repetirRefrao = true, maxLinhas = 6, soPrimeira = true, escuro = true } = {}) {
   const slides = [];
   const data = x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
   if (titulos) slides.push({ tipo: 'capa', titulo: x.titulo, sub: data });
@@ -102,7 +102,7 @@ export function apresentacaoMissa(x) {
   const { el, fechar } = modal(`
     <h2 style="margin-top:0">Apresentação de “${esc(x.titulo)}”</h2>
     <p class="pequeno suave">Só a letra, para o telão: ${n} ${n === 1 ? 'canto' : 'cantos'}, um slide por estrofe e por refrão.</p>
-    <label style="display:block;margin:6px 0"><input type="checkbox" id="ti" checked> Slide com o nome de cada canto (e capa da missa)</label>
+    <label style="display:block;margin:6px 0"><input type="checkbox" id="ti"> Slide com o nome de cada canto (e capa da missa)</label>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="rr" checked> Repetir o refrão depois de cada estrofe</label>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="es" checked> Slide escuro (tela preta) depois de cada canto</label>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="sp" checked> Só a 1ª opção de cada parte (pula “Glória (2)”, “Santo (2)”…)</label>
