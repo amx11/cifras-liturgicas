@@ -284,6 +284,43 @@ function ligarFolheto(raiz, fol, { aoPor, aoRemover } = {}) {
   });
 }
 
+// ---------- Missa automática pela data ----------
+// Ao abrir o app, olha a data de hoje: o repertório da Arquidiocese de hoje ou dos próximos dias (até o domingo;
+// solenidade no meio da semana também) já vira a missa, montada com os cantos na ordem proposta e, se houver,
+// com os cantos do folheto em primeiro. Monta uma vez por repertório (se você apagar, não volta).
+const hojeIso = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+function repertorioDosProximosDias(reps, iso) {
+  const d = new Date(iso + 'T12:00').getTime();
+  let melhor = null, dist = Infinity;
+  for (const r of reps) {
+    if (!r.data || !r.musicas?.length) continue;
+    const dias = Math.round((new Date(r.data + 'T12:00').getTime() - d) / 864e5);
+    if (dias >= 0 && dias <= 6 && dias < dist) { dist = dias; melhor = r; }
+  }
+  return melhor;
+}
+export async function missaAutomatica() {
+  const reps = await carregarRepertorios();
+  const r = repertorioDosProximosDias(reps, hojeIso());
+  if (!r) return null;
+  const feitas = estado.prefs.missasAutomaticas || [];
+  const ja = estado.missas.find(y => y.repertorio === r.id || y.data === r.data);
+  if (ja || feitas.includes(r.id)) return ja || null;
+  const d = new Date(r.data + 'T12:00');
+  const missa = { id: novoId(), titulo: r.nome, data: r.data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r.id, automatica: true,
+    itens: itensDoRepertorio(r).itens };
+  const fol = folhetoDaData(await listarFolhetos(), r.data);
+  if (fol) aplicarFolheto(missa.itens, fol);
+  estado.missas.push(missa);
+  estado.prefs.missasAutomaticas = [...feitas, r.id].slice(-60);
+  // fica como a missa do painel se não houver outra de hoje em diante
+  const ativa = missaAtiva();
+  if (!ativa || (ativa.data && ativa.data < hojeIso())) { estado.prefs.missaAtiva = missa.id; foco.idx = null; }
+  salvarPrefs(); salvar();
+  aviso(`Missa de ${dataCurta(r.data)} pronta: ${r.nome} (repertório da Arquidiocese${fol ? ' e folheto' : ''})`, 4500);
+  return missa;
+}
+
 // ---------- Lista de missas ----------
 export function telaMissas(tela) {
   const missas = estado.missas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
@@ -291,7 +328,7 @@ export function telaMissas(tela) {
     <div class="barra" style="justify-content:space-between"><h1 style="margin:0">Missas</h1>
       <button class="btn primario" id="nova">✚ Nova missa</button></div>
     ${missas.length ? missas.map(x => `<a class="item" href="#/missa/${x.id}">
-      <span class="info"><span class="nome">${esc(x.titulo)}</span>
+      <span class="info"><span class="nome">${esc(x.titulo)}${x.automatica ? ' <span class="selo folheto" title="Montada sozinha pela data, com o repertório da Arquidiocese">automática</span>' : ''}</span>
         <div class="comp">${x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : ''} · ${x.itens.filter(i => i.chave).length} cantos</div>
         <div class="selos">${x.tempo ? `<span class="selo tempo" style="--cor:${COR_TEMPO[x.tempo]}">${esc(nomeTempo(x.tempo))}</span>` : ''}${x.ano ? `<span class="selo">${esc(estado.taxonomia.anos[x.ano] || '')}</span>` : ''}</div>
       </span></a>`).join('') : '<p class="vazio">Nenhuma missa ainda. Crie uma e escolha os cantos de cada parte.</p>'}
