@@ -506,6 +506,10 @@ function telaAjustes() {
       <label><input type="checkbox" id="mono" ${p.mono ? 'checked' : ''}> Fonte monoespaçada (como no PDF)</label>
     </div>
     <div class="cartao">
+      <h2 style="margin-top:0">Capas da missa</h2>
+      <label class="campo"><span>Nome da paróquia ou comunidade (aparece embaixo, na capa)</span><input type="text" id="paroquia" value="${esc(p.paroquia || '')}" placeholder="Ex.: Paróquia Santa Rita"></label>
+    </div>
+    <div class="cartao">
       <h2 style="margin-top:0">Servidor de reconhecimento</h2>
       <p class="pequeno suave">Usado para cifrar a partir do YouTube e transcrever a letra. Rode <code>node server/servidor.mjs</code> no computador.</p>
       <label class="campo"><span>Endereço</span><input type="url" id="servidor" value="${esc(p.servidor)}"></label>
@@ -526,6 +530,7 @@ function telaAjustes() {
   $('#fonte').oninput = e => { p.fonte = +e.target.value; $('#vf').textContent = p.fonte + 'px'; salvarPrefs(); aplicarPrefs(); };
   $('#mostrar').onchange = e => { p.mostrarAcordes = e.target.checked; salvarPrefs(); };
   $('#mono').onchange = e => { p.mono = e.target.checked; salvarPrefs(); };
+  $('#paroquia').onchange = e => { p.paroquia = e.target.value.trim(); salvarPrefs(); };
   $('#servidor').onchange = e => { p.servidor = e.target.value.replace(/\/$/, ''); salvarPrefs(); };
   $('#testar').onclick = async () => {
     const r = $('#res-servidor'); r.textContent = 'Testando...';

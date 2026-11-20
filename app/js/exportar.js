@@ -5,7 +5,7 @@ import { gerarPDF } from './pdf-missa.js';
 import { esc, aviso, modal, nomeTempo } from './ui.js';
 import { paginasComoImagens } from './visualizar-pdf.js';
 import { CAPAS, capaPorId, capaAutomatica, svgCapa, urlSvg, pngCapa, textosDaCapa } from './capas.js';
-import { salvarMissas } from './dados.js';
+import { salvarMissas, estado as estadoApp } from './dados.js';
 
 let carregando = null;
 export function carregarJsPDF() {
@@ -56,7 +56,7 @@ export function exportarMissa(x) {
   selCapa.value = x.capa || 'auto';
   const capaEscolhida = () => (selCapa.value === 'nenhuma' ? null : selCapa.value === 'auto' ? auto : capaPorId(selCapa.value));
   const A4 = { largura: 1240, altura: 1754 };
-  const mostrarPrevia = () => { const c = capaEscolhida(); prev.hidden = !c; if (c) prev.src = urlSvg(svgCapa(c, { ...textosDaCapa(x, c), ...A4 })); };
+  const mostrarPrevia = () => { const c = capaEscolhida(); prev.hidden = !c; if (c) prev.src = urlSvg(svgCapa(c, { ...textosDaCapa(x, c, estadoApp.prefs.paroquia), ...A4 })); };
   selCapa.onchange = () => { x.capa = selCapa.value; salvarMissas(); mostrarPrevia(); };
   mostrarPrevia();
   el.querySelector('#ok').onclick = async () => {
@@ -72,7 +72,7 @@ export function exportarMissa(x) {
         try { c.imagens = await paginasComoImagens(c.pdfImagem); } catch { c.imagens = null; }
       }
       const c = capaEscolhida();
-      const capa = c ? await pngCapa(c, { ...textosDaCapa(x, c), ...A4 }) : null;
+      const capa = c ? await pngCapa(c, { ...textosDaCapa(x, c, estadoApp.prefs.paroquia), ...A4 }) : null;
       const doc = gerarPDF(JsPDF, dados, { acordes, umaPorPagina: el.querySelector('#um').checked, grande: el.querySelector('#gr').checked, capa });
       const nome = `${x.data || 'missa'} - ${x.titulo}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() + '.pdf';
       doc.save(nome);
