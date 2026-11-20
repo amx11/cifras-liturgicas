@@ -7,17 +7,60 @@ import { esc, aviso, modal } from './ui.js';
 import { carregarJsPDF } from './exportar.js';
 
 // ---------- Slides ----------
-const limparLinha = t => t.replace(/^\s*(R(efr[aã]o)?\s*[.:]+\s*|\d+\s*(ª|a)?\s*[.)\-–]\s*)/i, '').replace(/\s+/g, ' ').trim();
+// Só a letra que se canta: sem número da estrofe, "R.", rótulo de quem canta (S:, T:, Todos:, Solo:), notas para o
+// músico ("*versão simplificada", "Repete-se a antífona", "= 60"), tablatura; sílabas soltas ("a - mor") juntadas
+const ROTULO = /^\s*(R(efr[aã]o)?|S|T|P|L|C|Ass|Todos(,[^:]{0,20})?|Solo|Solista|Coro|Assembl[eé]ia|Pres(idente)?|Povo|Mulheres|Homens|Leitor|Cantor|Animador|Sac(erdote)?|Ref)\s*[.:]+\s*|^\s*(Solo|Todos|Coro|Solista)\s*[-–]\s*/i;
+const NAO_CANTA = /^\s*(\*|=\s*\d|\(?\s*(repete|retorna|bis\b|instrumental|intro|introdu|solo\b|final\b|fim\b|ponte|coda|vers[aã]o simplificada|obs\b|nota\b))|vers[aã]o simplificada|acorde adicionado|\(?\s*†|flexa|@[\w.]+\s*$|[A-Ga-g]?\s*\|[-\d|~bhp\/\\ ]{8,}/i;
+// título de seção dentro da cifra ("Entrada opcional - Tempo do Natal", "TE DEUM - Frei Luiz Carlos Susin")
+const TITULO_SECAO = /\s[-–]\s.*\b(opcional|melodia|canto de|frei|pe\.|padre|tempo d[oe]|abertura|entrada|comunh[aã]o|ofert[oó]rio|aclama[cç][aã]o|vers[aã]o|natal\w*|envio|adora[cç][aã]o|oferendas|apres\.|quaresma|advento|\d+º?\s*d\s*t\s*[cpa])\b/i;
+function limparLinha(t) {
+  let s = t.replace(/\s+/g, ' ').trim();
+  if (NAO_CANTA.test(s) || TITULO_SECAO.test(s)) return '';
+  const toks = s.split(/\s+/);
+  if (toks.length >= 2 && toks.filter(w => /^\*?\(?[A-G][#b°ºmMajsudi\d\/()+#A-G]*\*?$/.test(w)).length / toks.length >= 0.5) return '';
+  for (let k = 0; k < 3 && ROTULO.test(s); k++) s = s.replace(ROTULO, '');
+  // marcas de canto de salmo (">2b.", "b)", "-> 3c") e acorde entre parênteses no meio da palavra ("poder(eb6(#11))")
+  s = s.replace(/->\s*\d+[a-c]?/g, ' ').replace(/^>?\s*\d+[a-c]\.?\s+/, '').replace(/^>\s*/, '').replace(/(^|\s)[a-c]\s?\)\s*/g, ' ')
+    .replace(/\(\s*[A-Ga-g][#b]?\d*[^\s()]*(\([^)]*\))?[^\s()]*\)/g, '');
+  // parênteses só com acordes ("(A#o B B/A)", "((1ª vez D/E))", "(|B|)"): fora; com letra ("(Ele te ama!)") fica
+  s = s.replace(/\(+([^()]*(?:\([^()]*\)[^()]*)*)\)+/g, (all, dentro) => ((dentro.match(/\p{L}{3,}/gu) || []).every(w => /^vez$/i.test(w)) && /[A-G]|\d/.test(dentro) ? '' : all));
+  s = s.replace(/\s*=\s*/g, ' ').replace(/\*/g, '').replace(/\s+R\.?\s*$/, '').trim();   // "*" = pausa do salmista; "R." no fim = volta ao refrão
+  s = s.replace(/^\s*\d+\s*(ª|a)?\s*[.)\-–]\s*/, '').replace(/^\(\d\)\s*/, '');
+  s = s.replace(/\s*[*†‡+]+\s*$/g, '').replace(/\(\s*bis\s*\)/gi, '(2x)');
+  // sílaba solta: "a - mor", "gló--- ria" (só hífen comum, pedaço curto; travessão entre palavras fica)
+  s = s.replace(/(\p{L})(?:\s+-+\s*|-{2,}\s*)(\p{L})/gu, (all, a, b, off, str) => {
+    const esq = str.slice(0, off + 1).match(/\p{L}+$/u)?.[0] || '', dir = str.slice(off + all.length - 1).match(/^\p{L}+/u)?.[0] || '';
+    return esq.length <= 3 || dir.length <= 3 ? a + b : all;
+  });
+  return s.trim();
+}
+// linha comprida demais para o telão: quebra na pontuação mais perto do meio (senão no espaço)
+function quebrar(l, max = 46) {
+  if (l.length <= max) return [l];
+  const meio = l.length / 2;
+  const cortes = [...l.matchAll(/[,;:!?]\s/g)].map(m => m.index + 1);
+  const espacos = [...l.matchAll(/\s/g)].map(m => m.index);
+  if (!espacos.length) return [l];
+  const melhor = (cortes.length ? cortes : espacos).reduce((a, b) => (Math.abs(b - meio) < Math.abs(a - meio) ? b : a));
+  if (melhor < 8 || melhor >= l.length - 8) return [l];
+  return [...quebrar(l.slice(0, melhor).trim(), max), ...quebrar(l.slice(melhor).trim(), max)];
+}
 function paragrafos(chordpro) {
   const out = []; let at = null;
   for (const l of linhasCifra(chordpro, { mostrarAcordes: false })) {
     if (l.tipo === 'vazia') { at = null; continue; }
     if (l.tipo !== 'letra') continue;
-    const texto = limparLinha(l.texto);
-    if (!texto || !/[a-zà-ú]/i.test(texto)) continue;
-    if (!at) { at = { linhas: [], refrao: 0 }; out.push(at); }
-    at.linhas.push(texto);
-    if (l.refrao) at.refrao++;
+    // "S: ... T: ..." na mesma linha: cada voz na sua linha
+    for (const pedaco of l.texto.split(/\s(?=(?:S|T|P|Ass|Todos)\s*[.:]+\s)/)) {
+      const texto = limparLinha(pedaco);
+      if (!texto || !/[a-zà-ú]{2}/i.test(texto)) continue;
+      if (!at) { at = { linhas: [], refrao: 0 }; out.push(at); }
+      for (const q0 of quebrar(texto)) {
+        const q = limparLinha(q0);                       // o pedaço de baixo também pode começar com "Solo -", "="
+        if (!q || !/[a-zà-ú]{2}/i.test(q)) continue;
+        at.linhas.push(q); if (l.refrao) at.refrao++;
+      }
+    }
   }
   return out.map(p => ({ linhas: p.linhas, refrao: p.refrao * 2 >= p.linhas.length }));
 }
