@@ -194,7 +194,7 @@ function rotuloInversao(ac, grave) {
 // sequência: nomes dos acordes na ordem em que aparecem na música; devolve Map nome -> vozes (na 1ª vez que aparece)
 export function vozesTeclado(sequencia, instrumento = 'teclado') {
   const org = instrumento === 'orgao';
-  const [lo, hi, centro] = org ? [52, 69, 60] : [55, 77, 66];
+  const [lo, hi, centro] = org ? [52, 69, 60] : [60, 79, 68];   // teclado: mão direita acima da esquerda (que vai até a oitava)
   const out = new Map();
   let ant = null;
   for (const nome of sequencia) {
@@ -210,8 +210,12 @@ export function vozesTeclado(sequencia, instrumento = 'teclado') {
     ant = v;
     if (out.has(nome)) continue;
     const bx = ac.baixo ?? ac.raiz;
-    const baixo = org ? 36 + bx : (40 + mod(bx - 4));            // órgão: pedal C2–B2; teclado: E2–D#3
-    out.set(nome, { ac, acorde: v, baixo, inversao: rotuloInversao(ac, v[0]) });
+    // órgão: pedal (só o baixo) C2–B2; teclado: mão esquerda com tônica, quinta e oitava (1-5-8) a partir de C2–B2 —
+    // com baixo trocado (G/B) ou quinta diminuta/aumentada, só baixo e oitava (a quinta do baixo soaria errada)
+    const baixo = 36 + bx;
+    const quintaJusta = ac.notas.includes(7) && ac.baixo == null;
+    const me = org ? [baixo] : quintaJusta ? [baixo, baixo + 7, baixo + 12] : [baixo, baixo + 12];
+    out.set(nome, { ac, acorde: v, baixo, me, inversao: rotuloInversao(ac, v[0]) });
   }
   return out;
 }
@@ -219,12 +223,13 @@ export function vozesTeclado(sequencia, instrumento = 'teclado') {
 const PRETA = new Set([1, 3, 6, 8, 10]);
 export function svgTeclado(voz, instrumento = 'teclado') {
   const org = instrumento === 'orgao';
-  const todas = [voz.baixo, ...voz.acorde];
+  const me = voz.me || [voz.baixo];
+  const todas = [...me, ...voz.acorde];
   const lo = Math.floor(Math.min(...todas) / 12) * 12, hi = Math.ceil((Math.max(...todas) + 1) / 12) * 12 - 1;
   const brancas = []; for (let n = lo; n <= hi; n++) if (!PRETA.has(n % 12)) brancas.push(n);
   const W = 7, H = 46, L = brancas.length * W;
   const xBranca = n => brancas.indexOf(n) * W;
-  const classe = n => (n === voz.baixo ? (org ? 'd-pedal' : 'd-me') : voz.acorde.includes(n) ? (org ? 'd-me' : 'd-md') : '');
+  const classe = n => (me.includes(n) ? (org ? 'd-pedal' : 'd-me') : voz.acorde.includes(n) ? (org ? 'd-me' : 'd-md') : '');
   const b = brancas.map(n => `<rect x="${xBranca(n)}" y="0" width="${W}" height="${H}" class="d-branca ${classe(n)}"/>`);
   const p = [];
   for (let n = lo; n <= hi; n++) if (PRETA.has(n % 12)) p.push(`<rect x="${xBranca(n - 1) + W * 0.65}" y="0" width="${W * 0.7}" height="${H * 0.6}" class="d-preta ${classe(n)}"/>`);
@@ -234,7 +239,9 @@ export function legendaTeclado(voz, instrumento = 'teclado') {
   const bem = voz.ac.bemol || /b/.test(voz.ac.nome);
   const nomes = v => v.map(n => nomeNota(n % 12, bem)).join(' ');
   if (instrumento === 'orgao') return `<span class="cor-pedal">Pedal: ${nomeNota(voz.baixo % 12, bem)}</span> · <span class="cor-me">M.E.: ${nomes(voz.acorde)}</span><br><span class="suave">${voz.inversao} · M.D.: melodia</span>`;
-  return `<span class="cor-me">M.E.: ${nomeNota(voz.baixo % 12, bem)}</span> · <span class="cor-md">M.D.: ${nomes(voz.acorde)}</span><br><span class="suave">${voz.inversao}</span>`;
+  const me = voz.me || [voz.baixo];
+  const tipoME = me.length === 3 ? 'tônica, 5ª e 8ª' : voz.ac.baixo != null ? 'baixo e 8ª' : 'tônica e 8ª';
+  return `<span class="cor-me">M.E.: ${nomes(me)}</span> <span class="suave">(${tipoME})</span><br><span class="cor-md">M.D.: ${nomes(voz.acorde)}</span> <span class="suave">· ${voz.inversao}</span>`;
 }
 
 // ---------- Flauta doce soprano (digitação barroca) ----------

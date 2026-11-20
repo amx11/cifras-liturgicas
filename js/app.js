@@ -124,7 +124,7 @@ function acordesDaMusica(chordpro, semi, bemol) {
 function diagramas(seq, instrumento, so = null) {
   const vozes = instrumento === 'teclado' || instrumento === 'orgao' ? vozesTeclado(seq, instrumento) : null;
   const distintos = so ? [so] : [...new Set(seq)];
-  const legenda = instrumento === 'teclado' ? '<div class="pequeno suave legenda-cores"><span class="cor-me">■ mão esquerda (baixo)</span> <span class="cor-md">■ mão direita (inversão mais perto do acorde anterior)</span></div>'
+  const legenda = instrumento === 'teclado' ? '<div class="pequeno suave legenda-cores"><span class="cor-me">■ mão esquerda (tônica, 5ª e 8ª; com baixo trocado, baixo e 8ª — se preferir, só a nota de baixo)</span> <span class="cor-md">■ mão direita (inversão mais perto do acorde anterior)</span></div>'
     : instrumento === 'orgao' ? '<div class="pequeno suave legenda-cores"><span class="cor-pedal">■ pedal</span> <span class="cor-me">■ mão esquerda (acorde)</span> · mão direita livre para a melodia</div>'
     : instrumento === 'flauta' ? '<div class="pequeno suave legenda-cores">Flauta doce soprano, digitação barroca: ● tapado ○ aberto ◐ meio; o 1º furo é o do polegar (atrás).</div>'
     : instrumento === 'transversal' ? '<div class="pequeno suave legenda-cores">Flauta transversal (sistema Boehm): ● apertado ○ solto. De cima para baixo: polegar (à esquerda), 3 dedos da mão esquerda, chave de Sol# (mindinho esquerdo), 3 dedos da mão direita, chave de Mi♭ (mindinho direito) e, embaixo, as chaves do pé (Dó# e Dó). Na 2ª oitava a posição é a mesma, soprando mais — menos Ré e Mi♭, que levantam o 1º dedo.</div>' : '';
