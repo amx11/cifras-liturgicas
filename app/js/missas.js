@@ -4,7 +4,7 @@ import { esc, aviso, modal, confirmar, irPara, ORDEM_TEMPOS, COR_TEMPO, nomeTemp
 import { painelCifra, telaEditar } from './app.js';
 import { chordproNoTom } from './cifra.js';
 import { exportarMissa } from './exportar.js';
-import { listarFolhetos, folhetoDaData, pdfDoFolheto, sincronizarFolhetos, removerFolheto } from './folheto.js';
+import { listarFolhetos, folhetoDaData, pdfDoFolheto, sincronizarFolhetos, removerFolheto, folhetosCompartilhados } from './folheto.js';
 import { desenharPDF } from './visualizar-pdf.js';
 
 // Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
@@ -296,7 +296,7 @@ export function telaMissas(tela) {
         <div class="selos">${x.tempo ? `<span class="selo tempo" style="--cor:${COR_TEMPO[x.tempo]}">${esc(nomeTempo(x.tempo))}</span>` : ''}${x.ano ? `<span class="selo">${esc(estado.taxonomia.anos[x.ano] || '')}</span>` : ''}</div>
       </span></a>`).join('') : '<p class="vazio">Nenhuma missa ainda. Crie uma e escolha os cantos de cada parte.</p>'}
     <h2 style="margin-top:1.4em">Folhetos “O Dia do Senhor”</h2>
-    <p class="pequeno suave">Escolha os PDFs do folheto (os que você recebe como assinante). O app lê a data e os cantos e liga cada folheto à missa do fim de semana. O folheto fica só neste aparelho.</p>
+    <p class="pequeno suave">No celular: no WhatsApp, toque no PDF do folheto → Compartilhar → <b>Cifras Litúrgicas</b>. Ou toque em Sincronizar e escolha os PDFs. O app lê a data e os cantos e liga cada folheto à missa do fim de semana. O folheto fica só neste aparelho.</p>
     <div class="barra"><button class="btn primario" id="sinc">⟳ Sincronizar folhetos</button><input type="file" id="arq-folheto" accept="application/pdf,.pdf" multiple hidden></div>
     <p class="pequeno" id="sinc-status" aria-live="polite"></p>
     <div id="lista-folhetos"></div>`;
@@ -309,10 +309,10 @@ export function telaMissas(tela) {
   };
   mostrar();
   tela.querySelector('#sinc').onclick = () => arq.click();
-  arq.onchange = async () => {
-    const arquivos = [...arq.files]; arq.value = '';
+  const sincronizar = async arquivos => {
     if (!arquivos.length) return;
     const botao = tela.querySelector('#sinc'); botao.disabled = true;
+    tela.querySelector('#sinc').scrollIntoView({ block: 'center' });
     try {
       const r = await sincronizarFolhetos(arquivos, msg => { status.textContent = msg; });
       status.innerHTML = [r.novos.length ? `✓ ${r.novos.length} folheto(s) lido(s): ${r.novos.map(f => `${esc(f.titulo)} (${esc(dataCurta(f.data))}, ${f.cantos.length} cantos)`).join('; ')}` : '',
@@ -320,6 +320,9 @@ export function telaMissas(tela) {
     } finally { botao.disabled = false; }
     mostrar();
   };
+  arq.onchange = () => { const arquivos = [...arq.files]; arq.value = ''; sincronizar(arquivos); };
+  // chegou pelo "Compartilhar" (WhatsApp → Cifras Litúrgicas): já lê
+  folhetosCompartilhados().then(sincronizar);
 }
 
 export function novaMissa(aoCriar, { data: dataInicial } = {}) {
