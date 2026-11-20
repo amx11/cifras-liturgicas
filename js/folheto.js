@@ -95,6 +95,21 @@ export async function removerFolheto(data) {
   cache = null;
 }
 
+// PDFs que chegaram pelo "Compartilhar" do Android (o service worker guarda; aqui viram File e saem da fila)
+export async function folhetosCompartilhados() {
+  if (!('caches' in self)) return [];
+  try {
+    const cache = await caches.open('cl-compartilhados');
+    const out = [];
+    for (const req of await cache.keys()) {
+      const r = await cache.match(req);
+      if (r) out.push(new File([await r.blob()], decodeURIComponent(r.headers.get('X-Nome') || 'folheto.pdf'), { type: 'application/pdf' }));
+      await cache.delete(req);
+    }
+    return out;
+  } catch { return []; }
+}
+
 // ---------- Sincronizar: lê os PDFs escolhidos e guarda os novos ----------
 // arquivos: File[] (PDFs do folheto). Já guardado com o mesmo nome e tamanho = pula.
 export async function sincronizarFolhetos(arquivos, progresso = () => {}) {
