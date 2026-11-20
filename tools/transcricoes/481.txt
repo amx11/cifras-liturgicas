@@ -1,0 +1,6 @@
+# conferir: as três opções do "Eis o mistério da fé" vinham numa linha só, separadas por "||"; agora uma por linha.
+(1) [G]Eis o mis[C]tério da [D]fé!
+(2) [G]Eis o mis[D7]tério da [G]fé!
+(3) [G]Eis o mis[C]tério da fé[G]!
+
+Salva[G]dor do [Em]mundo, sal[Am]vai-[D]nos, [G]vós que [Em]nos liber[A]tas[D]tes pela [Am]cruz e res[D7]surrei[G]ção!

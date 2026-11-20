@@ -189,6 +189,12 @@ for (const arq of ['app/data/musicas.json', 'app/data/pasta.json', 'app/data/can
     }
     let cp = m.chordpro.split('\n').filter((l, i) => !links.includes(l) && !cabecalhoRepetido.has(i)).join('\n').replace(/^\s*\n/, '').replace(/\u0000/g, ' ').split('\n').filter(l => !LIXO.some(re => re.test(l))).map(l => encaixar(silabasSeparadas(porPalavra(colchetes(linhaDeAcordes(l)), melisma)))).join('\n');
     cp = repeticoes(cp);
+    // perfil de rede social sozinho na linha ("@salmodiaiaonossodeus"): não é letra
+    cp = cp.split('\n').filter(l => !/^\s*(@[\w.]+|#[\w]+)(\s+(@[\w.]+|#[\w]+))*\s*$/.test(l.replace(/\[[^\]]*\]/g, ''))).join('\n');
+    // "(bis)" / "bis" no fim da linha: a regra do acervo é "(2x)"
+    cp = cp.replace(/[ \t]*\(\s*bis\s*\)/gi, ' (2x)').replace(/[ \t]+bis[ \t]*$/gim, ' (2x)');
+    // linha só de pontuação ou parênteses vazios (". .", "()"), sem acorde nem marca de repetição: sai
+    cp = cp.split('\n').filter(l => !(l.trim() && !/[A-Za-zÀ-ú0-9\[]/.test(l) && !/\/:|:\/|\|:|:\|/.test(l))).join('\n');
     // pontilhado de alinhamento no meio da letra ("Rei dos ............ céus")
     cp = cp.replace(/[ \t]*\.{4,}[ \t]*/g, ' ').replace(/[ \t]*(?:\. ){3,}\.?[ \t]*/g, ' ');
     // "/" sozinho no fim do verso (separador de verso que sobrou do PDF)
