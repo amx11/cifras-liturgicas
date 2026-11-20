@@ -80,66 +80,111 @@ for (const [n, f] of Object.entries(FORMAS)) {
   const pestana = presas.length > 4 && fm > 0 ? { casa: fm, de: trastes.findIndex(t => t === fm) } : null;
   DICIONARIO.set(assinatura(ac), { trastes, pestana, inicio: fm });
 }
-const cacheViolao = new Map();
-export function formaViolao(nome) {
-  if (cacheViolao.has(nome)) return cacheViolao.get(nome);
-  const ac = analisarAcorde(nome);
-  let melhor = ac ? DICIONARIO.get(assinatura(ac)) || null : null;
-  if (ac && !melhor) {
-    const bx = ac.baixo ?? ac.raiz;
-    const permit = new Set([...ac.pcs, bx]);
-    // a 5ª justa pode faltar quando o acorde tem 4 notas ou mais
-    const obrig = new Set(ac.pcs.filter((p, k) => !(ac.notas[k] === 7 && ac.notas.length >= 4)));
-    obrig.add(bx);
-    for (let base = 0; base <= 9; base++) {
-      const ops = AFINACAO.map(a => {
-        const o = [-1];
-        if (permit.has(a % 12) && base <= 4) o.push(0);
-        for (let f = Math.max(1, base); f <= base + 3; f++) if (permit.has((a + f) % 12)) o.push(f);
-        return o;
-      });
-      const fr = new Array(6);
-      const avaliar = () => {
-        const tocadas = fr.map((f, i) => i).filter(i => fr[i] >= 0);
-        if (tocadas.length < 3) return;
-        const graves = tocadas[0];
-        if ((AFINACAO[graves] + fr[graves]) % 12 !== bx) return;
-        const notas = new Set(tocadas.map(i => (AFINACAO[i] + fr[i]) % 12));
-        for (const p of obrig) if (!notas.has(p)) return;
-        const presas = tocadas.filter(i => fr[i] > 0);
-        const fm = presas.length ? Math.min(...presas.map(i => fr[i])) : 0;
-        const fM = presas.length ? Math.max(...presas.map(i => fr[i])) : 0;
-        if (fM - fm > 3) return;
-        const soltas0 = tocadas.some(i => fr[i] === 0);
-        if (soltas0 && fM >= 5) return;                       // corda solta com casa alta: esticada demais
-        // pestana: dedo 1 deitado na casa mais baixa, da corda mais grave presa nela até a 1ª corda (sem corda solta depois)
-        let pestana = null, dedos = presas.length;
-        if (presas.length > 4) {
-          const ini = presas.find(i => fr[i] === fm);
-          if (tocadas.filter(i => i > ini).some(i => fr[i] === 0)) return;
-          pestana = { casa: fm, de: ini };
-          dedos = presas.filter(i => fr[i] > fm).length + 1;
-        }
-        if (dedos > 4) return;
-        const internas = tocadas.length ? fr.slice(graves).filter(f => f < 0).length : 0;
-        const soltas = tocadas.filter(i => fr[i] === 0).length;
-        let trocas = 0;
-        for (let k = 1; k < tocadas.length; k++) if ((fr[tocadas[k]] === 0) !== (fr[tocadas[k - 1]] === 0)) trocas++;
-        let custo = fm * 1.4 + (pestana ? 2.2 : 0) + internas * 4 + graves * 0.35 - tocadas.length * 0.8 + dedos * 0.3 - (fm <= 3 ? soltas * 0.25 : 0)
-          + (fM - fm) * 0.5 + Math.max(0, trocas - 2) * 0.8;
-        if (graves >= 2 && ac.baixo == null) custo += 1.2;
-        if (!melhor || custo < melhor.custo) melhor = { trastes: [...fr], pestana, custo, inicio: fm };
-      };
-      const rec = i => { if (i === 6) return avaliar(); for (const f of ops[i]) { fr[i] = f; rec(i + 1); } };
-      rec(0);
-    }
+// níveis: simplificado = acorde básico (tríade), sem pestana, baixo pode ser outra nota do acorde;
+// médio = como está escrito (formas consagradas); avançado = como escrito, com a mão na mesma região do braço
+const comNotas = (ac, notas) => ({ ...ac, notas, pcs: notas.map(i => mod(ac.raiz + i)) });
+export const triade = ac => comNotas(ac, ac.notas.length <= 2 ? ac.notas : ac.notas.slice(0, 3));
+
+function gerarFormas(ac, { semPestana = false, baixoLivre = false, max = 1 } = {}) {
+  const bx = ac.baixo ?? ac.raiz;
+  const permit = new Set([...ac.pcs, bx]);
+  // a 5ª justa pode faltar quando o acorde tem 4 notas ou mais
+  const obrig = new Set(ac.pcs.filter((p, k) => !(ac.notas[k] === 7 && ac.notas.length >= 4)));
+  if (!baixoLivre) obrig.add(bx);
+  const lista = [];
+  for (let base = 0; base <= 9; base++) {
+    const ops = AFINACAO.map(a => {
+      const o = [-1];
+      if (permit.has(a % 12) && base <= 4) o.push(0);
+      for (let f = Math.max(1, base); f <= base + 3; f++) if (permit.has((a + f) % 12)) o.push(f);
+      return o;
+    });
+    const fr = new Array(6);
+    const avaliar = () => {
+      const tocadas = fr.map((f, i) => i).filter(i => fr[i] >= 0);
+      if (tocadas.length < (baixoLivre ? 4 : 3)) return;
+      const graves = tocadas[0];
+      const notaGrave = (AFINACAO[graves] + fr[graves]) % 12;
+      if (baixoLivre ? !ac.pcs.includes(notaGrave) : notaGrave !== bx) return;
+      const notas = new Set(tocadas.map(i => (AFINACAO[i] + fr[i]) % 12));
+      for (const q of obrig) if (!notas.has(q)) return;
+      const presas = tocadas.filter(i => fr[i] > 0);
+      const fm = presas.length ? Math.min(...presas.map(i => fr[i])) : 0;
+      const fM = presas.length ? Math.max(...presas.map(i => fr[i])) : 0;
+      if (fM - fm > 3) return;
+      if (tocadas.some(i => fr[i] === 0) && fM >= 5) return;      // corda solta com casa alta: esticada demais
+      // pestana: dedo 1 deitado na casa mais baixa, da corda mais grave presa nela até a 1ª corda (sem corda solta depois)
+      let pestana = null, dedos = presas.length;
+      if (presas.length > 4) {
+        if (semPestana) return;
+        const ini = presas.find(i => fr[i] === fm);
+        if (tocadas.filter(i => i > ini).some(i => fr[i] === 0)) return;
+        pestana = { casa: fm, de: ini };
+        dedos = presas.filter(i => fr[i] > fm).length + 1;
+      }
+      if (dedos > 4) return;
+      // corda abafada no meio (entre a mais grave e a mais aguda tocadas); corda solta espremida entre casas altas
+      const agudas = tocadas[tocadas.length - 1];
+      const internas = fr.slice(graves, agudas + 1).filter(f => f < 0).length;
+      let soltaNoMeio = 0;
+      for (let k = 1; k < tocadas.length - 1; k++) if (fr[tocadas[k]] === 0 && fr[tocadas[k - 1]] >= 3 && fr[tocadas[k + 1]] >= 3) soltaNoMeio++;
+      for (let k = 1; k < tocadas.length - 1; k++) if (fr[tocadas[k]] === 0 && fr[tocadas[k - 1]] > 0 && fr[tocadas[k + 1]] > 0) soltaNoMeio += Math.max(fr[tocadas[k - 1]], fr[tocadas[k + 1]]) >= 4 ? 1.35 : 0.55;
+      const soltas = tocadas.filter(i => fr[i] === 0).length;
+      let trocas = 0;
+      for (let k = 1; k < tocadas.length; k++) if ((fr[tocadas[k]] === 0) !== (fr[tocadas[k - 1]] === 0)) trocas++;
+      // simplificado (baixoLivre): forma pequena vale tanto quanto a cheia (menos peso para o nº de cordas e a corda do baixo)
+      let custo = fm * 1.4 + (pestana ? 2.2 : 0) + internas * 4 + graves * (baixoLivre ? 0 : 0.35) - tocadas.length * (baixoLivre ? 0.5 : 0.8) + dedos * 0.3 - (fm <= 3 ? soltas * 0.25 : 0)
+        + (fM - fm) * 0.5 + Math.max(0, trocas - 2) * 0.8 + soltaNoMeio * 1.5;
+      if (graves >= 2 && ac.baixo == null && !baixoLivre) custo += 1.2;
+      if (baixoLivre && notaGrave !== ac.raiz) custo += 3;
+      lista.push({ trastes: [...fr], pestana, custo, inicio: fm });
+    };
+    const rec = i => { if (i === 6) return avaliar(); for (const f of ops[i]) { fr[i] = f; rec(i + 1); } };
+    rec(0);
   }
-  cacheViolao.set(nome, melhor);
-  return melhor;
+  lista.sort((a, b) => a.custo - b.custo);
+  const vistos = new Set(), out = [];
+  for (const f of lista) { const k = f.trastes.join(','); if (!vistos.has(k)) { vistos.add(k); out.push(f); } if (out.length >= max) break; }
+  return out;
+}
+const cacheViolao = new Map();
+export function formaViolao(nome, nivel = 'medio') {
+  const chave = nome + '|' + nivel;
+  if (cacheViolao.has(chave)) return cacheViolao.get(chave);
+  const ac = analisarAcorde(nome);
+  let f = null;
+  if (ac && nivel === 'simples') {
+    // acorde com 7ª que já tem forma aberta fácil (B7, A7, E7, D7, Am7...) fica como está; senão, o acorde básico
+    const aberta = ac.notas.length <= 4 && ac.baixo == null ? DICIONARIO.get(assinatura(ac)) : null;
+    if (aberta && !aberta.pestana) { cacheViolao.set(chave, aberta); return aberta; }
+    const t = { ...triade(ac), baixo: null };
+    const dic = DICIONARIO.get(assinatura(t));
+    f = dic && !dic.pestana ? dic : gerarFormas(t, { semPestana: true, baixoLivre: true })[0] || dic || null;
+  }
+  if (ac && !f) f = DICIONARIO.get(assinatura(ac)) || gerarFormas(ac)[0] || null;
+  cacheViolao.set(chave, f);
+  return f;
+}
+// avançado: em cada acorde, entre as boas formas, a que deixa a mão mais perto de onde estava (mesma região do braço)
+const posicao = f => { const p = f.trastes.filter(t => t > 0); return p.length ? p.reduce((a, b) => a + b, 0) / p.length : 0.5; };
+export function formasViolaoSequencia(sequencia) {
+  const out = new Map();
+  let ant = null;
+  for (const nome of sequencia) {
+    const ac = analisarAcorde(nome);
+    if (!ac) continue;
+    const dic = DICIONARIO.get(assinatura(ac));
+    const cands = [...(dic ? [{ ...dic, custo: -2 }] : []), ...gerarFormas(ac, { max: 10 })];
+    if (!cands.length) continue;
+    const custo = f => f.custo + (ant == null ? 0 : Math.abs(posicao(f) - ant) * 0.9);
+    const f = cands.reduce((a, b) => (custo(b) < custo(a) ? b : a));
+    ant = posicao(f);
+    if (!out.has(nome)) out.set(nome, f);
+  }
+  return out;
 }
 
-export function svgViolao(nome) {
-  const f = formaViolao(nome);
+export function svgViolao(nome, f = formaViolao(nome)) {
   const L = 92, A = 112, x0 = 14, dx = 13, y0 = 26, dy = 16;
   if (!f) return `<svg viewBox="0 0 ${L} ${A}" class="diag" role="img" aria-label="${nome}: sem desenho"><text x="${L / 2}" y="60" text-anchor="middle" class="d-txt">?</text></svg>`;
   const presas = f.trastes.filter(t => t > 0);
@@ -191,31 +236,40 @@ function rotuloInversao(ac, grave) {
   if ([9, 10, 11].includes(i)) return '3ª inversão (7ª embaixo)';
   return 'inversão';
 }
-// sequência: nomes dos acordes na ordem em que aparecem na música; devolve Map nome -> vozes (na 1ª vez que aparece)
-export function vozesTeclado(sequencia, instrumento = 'teclado') {
+// sequência: nomes dos acordes na ordem em que aparecem na música; devolve Map nome -> vozes (na 1ª vez que aparece).
+// Níveis — teclado: simplificado = M.E. só o baixo, M.D. tríade; médio = M.E. tônica-5ª-8ª, M.D. até 4 notas (com a 7ª);
+// avançado = M.E. tônica-5ª-10ª, M.D. com todas as notas escritas (7ª, 9ª, 6ª...).
+// Órgão: simplificado = pedal + tríade; médio = pedal + acorde com a 7ª; avançado = pedal + M.E. + M.D. dobrando 8ª acima.
+export function vozesTeclado(sequencia, instrumento = 'teclado', nivel = 'medio') {
   const org = instrumento === 'orgao';
-  const [lo, hi, centro] = org ? [52, 69, 60] : [60, 79, 68];   // teclado: mão direita acima da esquerda (que vai até a oitava)
+  const [lo, hi, centro] = org ? [52, 69, 60] : nivel === 'avancado' ? [60, 81, 70] : [60, 79, 68];
   const out = new Map();
   let ant = null;
   for (const nome of sequencia) {
-    const ac = analisarAcorde(nome);
-    if (!ac) continue;
-    // mão do acorde: até 4 notas (tira a 5ª justa se passar)
+    const ac0 = analisarAcorde(nome);
+    if (!ac0) continue;
+    const ac = nivel === 'simples' ? triade(ac0) : ac0;
+    const limite = nivel === 'avancado' && !org ? 5 : 4;
     let pcs = ac.pcs;
-    if (pcs.length > 4) pcs = pcs.filter((p, k) => ac.notas[k] !== 7);
+    if (pcs.length > limite) pcs = pcs.filter((q, k) => ac.notas[k] !== 7);
+    if (pcs.length > limite) pcs = pcs.slice(0, limite);
     const cands = candidatos(pcs, lo, hi);
     if (!cands.length) continue;
-    const custo = v => (ant ? distancia(v, ant) : 0) + Math.abs(v.reduce((s, n) => s + n, 0) / v.length - centro) * (ant ? 0.25 : 1);
+    const custo = v => (ant ? distancia(v, ant) : 0) + Math.abs(v.reduce((a, n) => a + n, 0) / v.length - centro) * (ant ? 0.25 : 1);
     const v = cands.reduce((a, b) => (custo(b) < custo(a) ? b : a));
     ant = v;
     if (out.has(nome)) continue;
     const bx = ac.baixo ?? ac.raiz;
-    // órgão: pedal (só o baixo) C2–B2; teclado: mão esquerda com tônica, quinta e oitava (1-5-8) a partir de C2–B2 —
-    // com baixo trocado (G/B) ou quinta diminuta/aumentada, só baixo e oitava (a quinta do baixo soaria errada)
+    // mão esquerda / pedal a partir de C2–B2; com baixo trocado (G/B) ou 5ª diminuta/aumentada, sem a 5ª (soaria errada)
     const baixo = 36 + bx;
     const quintaJusta = ac.notas.includes(7) && ac.baixo == null;
-    const me = org ? [baixo] : quintaJusta ? [baixo, baixo + 7, baixo + 12] : [baixo, baixo + 12];
-    out.set(nome, { ac, acorde: v, baixo, me, inversao: rotuloInversao(ac, v[0]) });
+    const terca = [3, 4].includes(ac.notas[1]) ? ac.notas[1] : null;
+    let me;
+    if (org || nivel === 'simples') me = [baixo];
+    else if (nivel === 'avancado' && quintaJusta && terca != null) me = [baixo, baixo + 7, baixo + 12 + terca];
+    else me = quintaJusta ? [baixo, baixo + 7, baixo + 12] : [baixo, baixo + 12];
+    const md = org && nivel === 'avancado' ? v.map(n => n + 12) : null;
+    out.set(nome, { ac, acorde: v, baixo, me, md, nivel, inversao: rotuloInversao(ac, v[0]) });
   }
   return out;
 }
@@ -224,12 +278,13 @@ const PRETA = new Set([1, 3, 6, 8, 10]);
 export function svgTeclado(voz, instrumento = 'teclado') {
   const org = instrumento === 'orgao';
   const me = voz.me || [voz.baixo];
-  const todas = [...me, ...voz.acorde];
+  const md = voz.md || [];
+  const todas = [...me, ...voz.acorde, ...md];
   const lo = Math.floor(Math.min(...todas) / 12) * 12, hi = Math.ceil((Math.max(...todas) + 1) / 12) * 12 - 1;
   const brancas = []; for (let n = lo; n <= hi; n++) if (!PRETA.has(n % 12)) brancas.push(n);
   const W = 7, H = 46, L = brancas.length * W;
   const xBranca = n => brancas.indexOf(n) * W;
-  const classe = n => (me.includes(n) ? (org ? 'd-pedal' : 'd-me') : voz.acorde.includes(n) ? (org ? 'd-me' : 'd-md') : '');
+  const classe = n => (me.includes(n) ? (org ? 'd-pedal' : 'd-me') : voz.acorde.includes(n) ? (org ? 'd-me' : 'd-md') : md.includes(n) ? 'd-md' : '');
   const b = brancas.map(n => `<rect x="${xBranca(n)}" y="0" width="${W}" height="${H}" class="d-branca ${classe(n)}"/>`);
   const p = [];
   for (let n = lo; n <= hi; n++) if (PRETA.has(n % 12)) p.push(`<rect x="${xBranca(n - 1) + W * 0.65}" y="0" width="${W * 0.7}" height="${H * 0.6}" class="d-preta ${classe(n)}"/>`);
@@ -238,9 +293,9 @@ export function svgTeclado(voz, instrumento = 'teclado') {
 export function legendaTeclado(voz, instrumento = 'teclado') {
   const bem = voz.ac.bemol || /b/.test(voz.ac.nome);
   const nomes = v => v.map(n => nomeNota(n % 12, bem)).join(' ');
-  if (instrumento === 'orgao') return `<span class="cor-pedal">Pedal: ${nomeNota(voz.baixo % 12, bem)}</span> · <span class="cor-me">M.E.: ${nomes(voz.acorde)}</span><br><span class="suave">${voz.inversao} · M.D.: melodia</span>`;
+  if (instrumento === 'orgao') return `<span class="cor-pedal">Pedal: ${nomeNota(voz.baixo % 12, bem)}</span> · <span class="cor-me">M.E.: ${nomes(voz.acorde)}</span><br><span class="suave">${voz.inversao}</span> · ${voz.md ? `<span class="cor-md">M.D.: ${nomes(voz.md)} (8ª acima)</span>` : '<span class="suave">M.D.: melodia</span>'}`;
   const me = voz.me || [voz.baixo];
-  const tipoME = me.length === 3 ? 'tônica, 5ª e 8ª' : voz.ac.baixo != null ? 'baixo e 8ª' : 'tônica e 8ª';
+  const tipoME = me.length === 1 ? (voz.ac.baixo != null ? 'baixo' : 'tônica') : me.length === 3 ? (me[2] - me[0] > 12 ? 'tônica, 5ª e 10ª' : 'tônica, 5ª e 8ª') : voz.ac.baixo != null ? 'baixo e 8ª' : 'tônica e 8ª';
   return `<span class="cor-me">M.E.: ${nomes(me)}</span> <span class="suave">(${tipoME})</span><br><span class="cor-md">M.D.: ${nomes(voz.acorde)}</span> <span class="suave">· ${voz.inversao}</span>`;
 }
 
@@ -252,18 +307,48 @@ const DIGITACAO = {
   80: [1, 1, 1, 0, 1, 1, 0.5, 0], 81: [1, 1, 1, 0, 0, 0, 0, 0], 82: [1, 1, 0, 1, 1, 0, 0, 0], 83: [1, 1, 0, 0, 0, 0, 0, 0],
   84: [1, 0, 1, 0, 0, 0, 0, 0], 85: [0, 1, 1, 0, 0, 0, 0, 0], 86: [0, 0, 1, 0, 0, 0, 0, 0],
 };
-export function notasFlauta(nome) {
-  const ac = analisarAcorde(nome);
-  if (!ac) return [];
-  const out = []; let ant = 71;
-  for (const p of ac.pcs) {
-    let n = 72 + mod(p - 0);
+// notas para a flauta: médio = arpejo do acorde básico (1-3-5); avançado = todas as notas do acorde (7ª, 9ª...) e a 8ª
+// da tônica; simplificado = uma nota só por acorde (linhaFlauta: a mais perto da anterior — contracanto)
+const FAIXA = { flauta: [72, 86], transversal: [60, 85] };
+const infoNota = (n, bem, inst) => ({ midi: n, nome: nomeNota(n % 12, bem), solfejo: solfejo(n % 12, bem),
+  oitava: inst === 'transversal' ? (n >= 74 ? '2ª oitava' : '1ª oitava') : '' });
+export function notasFlauta(nome, nivel = 'medio', inst = 'flauta') {
+  const ac0 = analisarAcorde(nome);
+  if (!ac0) return [];
+  const ac = nivel === 'avancado' ? ac0 : triade(ac0);
+  const [lo, hi] = FAIXA[inst];
+  const bem = ac.bemol || /b/.test(nome);
+  const out = []; let ant = lo - 1;
+  for (const q of ac.pcs) {
+    let n = lo + mod(q - lo);
     while (n <= ant) n += 12;
-    while (n > 86) n -= 12;
-    if (n < 72) n += 12;
+    while (n > hi) n -= 12;
+    if (n < lo) n += 12;
     out.push(n); ant = n;
   }
-  return out.map(n => ({ midi: n, nome: nomeNota(n % 12, ac.bemol || /b/.test(nome)), solfejo: solfejo(n % 12, ac.bemol || /b/.test(nome)) }));
+  if (nivel === 'avancado' && out[0] + 12 <= hi && !out.includes(out[0] + 12)) out.push(out[0] + 12);
+  return out.map(n => infoNota(n, bem, inst));
+}
+export const notasTransversal = (nome, nivel = 'medio') => notasFlauta(nome, nivel, 'transversal');
+export function linhaFlauta(sequencia, inst = 'flauta') {
+  const [lo, hi] = FAIXA[inst];
+  const out = new Map();
+  let ant = null;
+  for (const nome of sequencia) {
+    const ac0 = analisarAcorde(nome);
+    if (!ac0) continue;
+    const ac = triade(ac0);
+    const opcoes = [];
+    for (let n = lo; n <= hi; n++) if (ac.pcs.includes(n % 12)) opcoes.push(n);
+    if (!opcoes.length) continue;
+    // 1º acorde: a 3ª no meio da extensão; depois, a nota do acorde mais perto da anterior (nota comum = fica parada)
+    const alvo = ant ?? (lo + hi) / 2;
+    const pref = ant == null ? opcoes.filter(n => mod(n - ac.raiz) === ac.notas[1]) : opcoes;
+    const n = (pref.length ? pref : opcoes).reduce((a, b) => (Math.abs(b - alvo) < Math.abs(a - alvo) ? b : a));
+    ant = n;
+    if (!out.has(nome)) out.set(nome, infoNota(n, ac.bemol || /b/.test(nome), inst));
+  }
+  return out;
 }
 export function svgFlauta(midi) {
   const d = DIGITACAO[midi];
@@ -289,19 +374,6 @@ const BOEHM = {
   74: [1, 0, 1, 1, 0, 1, 1, 1, 0], 75: [1, 0, 1, 1, 0, 1, 1, 1, 1],                 // Ré e Mi♭ da 2ª oitava: 1º dedo levantado
 };
 for (let n = 76; n <= 85; n++) BOEHM[n] = BOEHM[n - 12];                            // Mi a Dó# da 2ª oitava: mesma posição, soprando mais
-export function notasTransversal(nome) {
-  const ac = analisarAcorde(nome);
-  if (!ac) return [];
-  const bem = ac.bemol || /b/.test(nome);
-  const out = []; let ant = 59;
-  for (const p of ac.pcs) {
-    let n = 60 + mod(p);
-    while (n <= ant) n += 12;
-    while (n > 85) n -= 12;
-    out.push(n); ant = n;
-  }
-  return out.map(n => ({ midi: n, nome: nomeNota(n % 12, bem), solfejo: solfejo(n % 12, bem), oitava: n >= 74 ? '2ª oitava' : '1ª oitava' }));
-}
 export function svgTransversal(midi) {
   const d = BOEHM[midi];
   if (!d) return '';
@@ -320,23 +392,31 @@ export function svgTransversal(midi) {
 // ---------- Cartões ----------
 export const INSTRUMENTOS = [['violao', 'Violão'], ['teclado', 'Teclado'], ['orgao', 'Órgão'], ['flauta', 'Flauta doce'], ['transversal', 'Flauta transversal']];
 const escH = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-export function cartaoAcorde(nome, instrumento, vozes) {
+export const NIVEIS = [['simples', 'Simplificado'], ['medio', 'Médio'], ['avancado', 'Avançado']];
+// tudo o que depende da ordem dos acordes na música (inversões, região do braço, linha da flauta)
+export function prepararAcordes(sequencia, instrumento, nivel = 'medio') {
+  if (instrumento === 'teclado' || instrumento === 'orgao') return { nivel, vozes: vozesTeclado(sequencia, instrumento, nivel) };
+  if (instrumento === 'violao' && nivel === 'avancado') return { nivel, formas: formasViolaoSequencia(sequencia) };
+  if ((instrumento === 'flauta' || instrumento === 'transversal') && nivel === 'simples') return { nivel, linha: linhaFlauta(sequencia, instrumento) };
+  return { nivel };
+}
+export function cartaoAcorde(nome, instrumento, ctx = {}) {
+  const nivel = ctx.nivel || 'medio';
   let corpo = '', legenda = '';
   if (instrumento === 'violao') {
-    corpo = svgViolao(nome);
-    const f = formaViolao(nome);
-    legenda = f?.pestana ? `pestana na ${f.pestana.casa}ª casa` : f ? '' : 'sem forma simples';
+    const f = ctx.formas?.get(nome) || formaViolao(nome, nivel);
+    corpo = svgViolao(nome, f);
+    const tri = nivel === 'simples' ? analisarAcorde(nome) : null;
+    const reduzido = tri && tri.notas.length > 3 ? ` (tocando ${nomeNota(tri.raiz, tri.bemol)}${tri.notas[1] === 3 ? 'm' : ''})` : '';
+    legenda = (f?.pestana ? `pestana na ${f.pestana.casa}ª casa` : f ? '' : 'sem forma simples') + reduzido;
   } else if (instrumento === 'teclado' || instrumento === 'orgao') {
-    const v = vozes?.get(nome);
+    const v = ctx.vozes?.get(nome);
     if (v) { corpo = svgTeclado(v, instrumento); legenda = legendaTeclado(v, instrumento); }
-  } else if (instrumento === 'flauta') {
-    const ns = notasFlauta(nome);
-    corpo = `<div class="flauta-notas">${ns.map(n => `<div class="flauta-nota">${svgFlauta(n.midi)}<div class="pequeno"><b>${escH(n.nome)}</b><br>${escH(n.solfejo)}</div></div>`).join('')}</div>`;
-    legenda = 'arpejo do acorde';
-  } else if (instrumento === 'transversal') {
-    const ns = notasTransversal(nome);
-    corpo = `<div class="flauta-notas">${ns.map(n => `<div class="flauta-nota">${svgTransversal(n.midi)}<div class="pequeno"><b>${escH(n.nome)}</b><br>${escH(n.solfejo)}<br><span class="suave">${n.oitava}</span></div></div>`).join('')}</div>`;
-    legenda = 'arpejo do acorde';
+  } else if (instrumento === 'flauta' || instrumento === 'transversal') {
+    const ns = nivel === 'simples' ? [ctx.linha?.get(nome)].filter(Boolean) : notasFlauta(nome, nivel, instrumento);
+    const svg = instrumento === 'flauta' ? svgFlauta : svgTransversal;
+    corpo = `<div class="flauta-notas">${ns.map(n => `<div class="flauta-nota">${svg(n.midi)}<div class="pequeno"><b>${escH(n.nome)}</b><br>${escH(n.solfejo)}${n.oitava ? `<br><span class="suave">${n.oitava}</span>` : ''}</div></div>`).join('')}</div>`;
+    legenda = nivel === 'simples' ? 'nota do contracanto' : nivel === 'avancado' ? 'arpejo completo' : 'arpejo do acorde';
   }
   return `<div class="cartao-acorde ${instrumento}"><div class="nome-acorde">${escH(nome)}</div>${corpo || '<span class="suave pequeno">?</span>'}${legenda ? `<div class="legenda-acorde pequeno">${legenda}</div>` : ''}</div>`;
 }
