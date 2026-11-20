@@ -48,10 +48,10 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
         <div class="barra" style="margin:0">
           <button class="btn peq" data-semi="-1" title="Meio tom abaixo">−½</button>
           <button class="btn peq" data-semi="1" title="Meio tom acima">+½</button>
-          <span class="instrumentos" role="group" aria-label="Ver os acordes no instrumento"><span class="pequeno suave">Acordes no:</span>${INSTRUMENTOS.map(([k, v]) => `<button type="button" class="btn peq${estado.prefs.instrumento === k ? ' primario' : ''}" data-instrumento="${k}" aria-pressed="${estado.prefs.instrumento === k}">${v}</button>`).join('')}</span>
+          <span class="instrumentos" role="group" aria-label="Ver os acordes no instrumento"><span class="pequeno suave">Acordes no:</span>${INSTRUMENTOS.map(([k, v]) => `<button type="button" class="btn peq${estado.prefs.instrumento === k ? ' primario' : ''}" data-instrumento="${k}" aria-pressed="${estado.prefs.instrumento === k}">${v}</button>`).join('')}${estado.prefs.instrumento ? '<button type="button" class="btn peq" data-instrumento="" title="Ocultar os desenhos dos acordes">✕ Ocultar</button>' : ''}</span>
           <span class="pequeno suave">Original: <b>${esc(original)}</b>${m.outrosTons?.length ? ` (o PDF da arquidiocese traz também em ${m.outrosTons.map(esc).join(', ')})` : ''}${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
         </div></div>` : ''}
-      ${m.chordpro && original && estado.prefs.instrumento ? `<div class="diagramas nao-imprimir" aria-label="Acordes da música no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}">${diagramas(acordesDaMusica(m.chordpro, semi, bemol), estado.prefs.instrumento)}</div>` : ''}
+      ${m.chordpro && original && estado.prefs.instrumento ? `<div class="diagramas nao-imprimir" aria-label="Acordes da música no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}"><div class="barra" style="justify-content:space-between;margin:0 0 4px"><b class="pequeno">Acordes no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}</b><button type="button" class="btn peq" data-instrumento="">✕ Ocultar desenhos</button></div>${diagramas(acordesDaMusica(m.chordpro, semi, bemol), estado.prefs.instrumento)}</div>` : ''}
       ${m.museScore && !m.daPartitura?.formato?.startsWith('musescore') ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com o arquivo MuseScore da arquidiocese (acorde e sílaba nota a nota)${m.museScore.movidos ? ` — ${m.museScore.movidos} ${m.museScore.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'}` : ''}${m.museScore.estrofes ? ` — acordes de ${m.museScore.estrofes} ${m.museScore.estrofes === 1 ? 'estrofe completados' : 'estrofes completados'}` : ''}.</p>` : ''}
       ${m.conferida && !m.daPartitura && !m.museScore ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
       ${m.daPartitura && m.originalPdf ? `<div class="ocr-aviso nao-imprimir">
@@ -86,8 +86,8 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
     }
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.instrumento) {
-      estado.prefs.instrumento = estado.prefs.instrumento === b.dataset.instrumento ? null : b.dataset.instrumento;
+    if (b.dataset.instrumento !== undefined) {
+      estado.prefs.instrumento = !b.dataset.instrumento || estado.prefs.instrumento === b.dataset.instrumento ? null : b.dataset.instrumento;
       salvarPrefs(); desenhar(); return;
     }
     if (b.hasAttribute('data-ver-original')) {
