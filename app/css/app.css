@@ -355,3 +355,7 @@ h1 .num { min-width: 0; margin-right: .2em; }
 .modal .diag.teclas { width: 100%; max-width: 460px; }
 .modal .diag.flauta { width: 26px; }
 .modal .legenda-acorde { font-size: 15px; }
+
+.d-corpo-metal { fill: #dfe3e6; stroke: #7d868c; stroke-width: .8; }
+.diag.flauta.transversal { width: 24px; }
+.modal .diag.flauta.transversal { width: 36px; }
