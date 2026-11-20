@@ -5,6 +5,8 @@ import { musica } from './dados.js';
 import { linhasCifra } from './cifra.js';
 import { esc, aviso, modal } from './ui.js';
 import { carregarJsPDF } from './exportar.js';
+import { CAPAS, capaPorId, capaAutomatica, capaDaMissa, temaDaCapa, svgCapa, urlSvg, pngCapa, textosDaCapa } from './capas.js';
+import { salvarMissas } from './dados.js';
 
 // ---------- Slides ----------
 // Só a letra que se canta: sem número da estrofe, "R.", rótulo de quem canta (S:, T:, Todos:, Solo:), notas para o
@@ -70,10 +72,10 @@ function dividir(linhas, max) {
   for (let i = 0; i < linhas.length; i += tam) out.push(linhas.slice(i, i + tam));
   return out;
 }
-export function slidesDaMissa(x, { titulos = false, repetirRefrao = true, maxLinhas = 6, soPrimeira = true, escuro = true } = {}) {
+export function slidesDaMissa(x, { titulos = false, repetirRefrao = true, maxLinhas = 6, soPrimeira = true, escuro = true, capa = null } = {}) {
   const slides = [];
   const data = x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
-  if (titulos) slides.push({ tipo: 'capa', titulo: x.titulo, sub: data });
+  if (capa) slides.push({ tipo: 'capa', capa, ...textosDaCapa(x, capa) });   // capa desenhada (do tempo ou escolhida)
   for (const it of x.itens) {
     const m = it.chave && musica(it.chave);
     if (!m?.chordpro) continue;
@@ -107,7 +109,9 @@ export function apresentacaoMissa(x) {
     <label style="display:block;margin:6px 0"><input type="checkbox" id="es" checked> Slide escuro (tela preta) depois de cada canto</label>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="sp" checked> Só a 1ª opção de cada parte (pula “Glória (2)”, “Santo (2)”…)</label>
     <label style="display:block;margin:6px 0">Linhas por slide: <select id="ml"><option>4</option><option>5</option><option selected>6</option><option>8</option></select></label>
-    <label style="display:block;margin:6px 0">Cores: <select id="tema"><option value="escuro" selected>letra branca, fundo preto</option><option value="claro">letra preta, fundo branco</option><option value="azul">letra branca, fundo azul</option></select></label>
+    <label style="display:block;margin:6px 0">Capa: <select id="capa"></select></label>
+    <img id="prev-capa" alt="Prévia da capa" style="width:100%;max-width:360px;border-radius:6px;display:block;margin:4px 0 8px">
+    <label style="display:block;margin:6px 0">Cores: <select id="tema"><option value="tempo" selected>do tempo litúrgico (iguais à capa)</option><option value="escuro">letra branca, fundo preto</option><option value="claro">letra preta, fundo branco</option><option value="azul">letra branca, fundo azul</option></select></label>
     <div class="barra" style="flex-wrap:wrap">
       <button class="btn primario" id="agora">▶ Apresentar agora</button>
       <button class="btn" id="pptx">⬇ PowerPoint (.pptx)</button>
@@ -115,8 +119,17 @@ export function apresentacaoMissa(x) {
       <button class="btn" data-fechar>Fechar</button>
     </div>
     <p id="msg" class="pequeno suave">No telão: toque/clique ou use as setas para passar; Esc para sair; B deixa a tela preta.</p>`);
-  const opcoes = () => ({ titulos: el.querySelector('#ti').checked, repetirRefrao: el.querySelector('#rr').checked, maxLinhas: +el.querySelector('#ml').value, soPrimeira: el.querySelector('#sp').checked, escuro: el.querySelector('#es').checked });
-  const tema = () => TEMAS[el.querySelector('#tema').value];
+  // capa: automática pelo tempo/festa, uma escolhida, ou nenhuma — a escolha fica guardada na missa
+  const selCapa = el.querySelector('#capa'), prev = el.querySelector('#prev-capa');
+  const auto = capaAutomatica(x);
+  selCapa.innerHTML = `<option value="auto">Automática: ${esc(auto.nome)}</option>${CAPAS.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}<option value="nenhuma">Sem capa</option>`;
+  selCapa.value = x.capa || 'auto';
+  const capaEscolhida = () => (selCapa.value === 'nenhuma' ? null : selCapa.value === 'auto' ? auto : capaPorId(selCapa.value));
+  const mostrarPrevia = () => { const c = capaEscolhida(); prev.hidden = !c; if (c) prev.src = urlSvg(svgCapa(c, { ...textosDaCapa(x, c), largura: 1600, altura: 900 })); };
+  selCapa.onchange = () => { x.capa = selCapa.value; salvarMissas(); mostrarPrevia(); };
+  mostrarPrevia();
+  const opcoes = () => ({ capa: capaEscolhida(), titulos: el.querySelector('#ti').checked, repetirRefrao: el.querySelector('#rr').checked, maxLinhas: +el.querySelector('#ml').value, soPrimeira: el.querySelector('#sp').checked, escuro: el.querySelector('#es').checked });
+  const tema = () => (el.querySelector('#tema').value === 'tempo' ? temaDaCapa(capaEscolhida() || auto) : TEMAS[el.querySelector('#tema').value]);
   const msg = el.querySelector('#msg');
   const nomeArq = ext => `${(x.titulo || 'missa').replace(/[\\/:*?"<>|]+/g, '-')}${x.data ? ' ' + x.data : ''} - apresentacao.${ext}`;
   el.querySelector('#agora').onclick = () => { const s = slidesDaMissa(x, opcoes()); fechar(); apresentar(s, tema()); };
@@ -155,7 +168,7 @@ export function apresentar(slides, tema = TEMAS.escuro) {
     tela.style.background = '#' + (s.tipo === 'vazio' || preto ? '000000' : tema.fundo);
     if (preto || s.tipo === 'vazio') { tela.innerHTML = ''; return; }
     let html = '';
-    if (s.tipo === 'capa') html = `<div><div style="font-size:${Math.min(W / 14, 72)}px;font-weight:700">${esc(s.titulo)}</div><div style="font-size:${Math.min(W / 30, 34)}px;color:#${tema.suave};margin-top:.6em">${esc(s.sub)}</div></div>`;
+    if (s.tipo === 'capa') { tela.style.background = s.capa.fundo[0]; tela.innerHTML = svgCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, largura: 1600, altura: 900 }).replace('<svg ', '<svg style="width:100%;height:100%" preserveAspectRatio="xMidYMid slice" '); return; }
     else if (s.tipo === 'titulo') html = `<div><div style="font-size:${Math.min(W / 28, 36)}px;color:#${tema.suave};text-transform:uppercase;letter-spacing:.08em">${esc(s.parte)}</div><div style="font-size:${Math.min(W / 16, 64)}px;font-weight:700;margin-top:.3em">${esc(s.titulo)}</div></div>`;
     else {
       const fs = tamanho(s.linhas, W, H);
@@ -213,8 +226,7 @@ export async function gerarPptx(slides, tema, nome, { baixar = true } = {}) {
     sl.background = { color: s.tipo === 'vazio' ? '000000' : tema.fundo };
     if (s.tipo === 'vazio') continue;
     if (s.tipo === 'capa') {
-      sl.addText(s.titulo, { x: 0.4, y: 1.6, w: 9.2, h: 1.4, align: 'center', valign: 'middle', fontSize: 44, bold: true, color: tema.texto, fontFace: 'Arial', fit: 'shrink' });
-      if (s.sub) sl.addText(s.sub, { x: 0.4, y: 3.1, w: 9.2, h: 0.6, align: 'center', fontSize: 22, color: tema.suave, fontFace: 'Arial' });
+      sl.addImage({ data: await pngCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, largura: 1920, altura: 1080 }), x: 0, y: 0, w: 10, h: 5.625 });
     } else if (s.tipo === 'titulo') {
       sl.addText(s.parte.toUpperCase(), { x: 0.4, y: 1.5, w: 9.2, h: 0.6, align: 'center', fontSize: 22, color: tema.suave, fontFace: 'Arial', charSpacing: 2 });
       sl.addText(s.titulo, { x: 0.4, y: 2.1, w: 9.2, h: 1.5, align: 'center', valign: 'middle', fontSize: 40, bold: true, color: tema.texto, fontFace: 'Arial', fit: 'shrink' });
@@ -234,12 +246,14 @@ export async function gerarPdfSlides(slides, tema, nome, { baixar = true } = {})
   const L = 254, A = 142.875;                                       // 16:9 em mm (igual ao PowerPoint)
   const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: [A, L] });
   const cor = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  const capas = new Map();
+  for (const s of slides) if (s.tipo === 'capa') capas.set(s, await pngCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, largura: 1920, altura: 1080 }));
   slides.forEach((s, k) => {
     if (k) doc.addPage([A, L], 'landscape');
+    if (s.tipo === 'capa') { doc.addImage(capas.get(s), 'JPEG', 0, 0, L, A); return; }
     doc.setFillColor(...cor(s.tipo === 'vazio' ? '000000' : tema.fundo)); doc.rect(0, 0, L, A, 'F');
     if (s.tipo === 'vazio') return;
     const centro = (texto, y, tam, estilo = 'normal', c = tema.texto) => { doc.setFont('helvetica', estilo); doc.setFontSize(tam); doc.setTextColor(...cor(c)); doc.text(texto, L / 2, y, { align: 'center', baseline: 'middle' }); };
-    if (s.tipo === 'capa') { centro(s.titulo, A / 2 - 8, 40, 'bold'); if (s.sub) centro(s.sub, A / 2 + 12, 20, 'normal', tema.suave); return; }
     if (s.tipo === 'titulo') { centro(s.parte.toUpperCase(), A / 2 - 14, 20, 'normal', tema.suave); centro(s.titulo, A / 2 + 4, 36, 'bold'); return; }
     // maior tamanho que cabe: altura (linhas) e largura (linha mais larga)
     let tam = Math.min(54, (A * 0.78) / (s.linhas.length * 1.3) / 0.3528);

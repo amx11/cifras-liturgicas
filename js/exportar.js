@@ -4,6 +4,8 @@ import { linhasCifra, semitonsEntre, preferirBemol } from './cifra.js';
 import { gerarPDF } from './pdf-missa.js';
 import { esc, aviso, modal, nomeTempo } from './ui.js';
 import { paginasComoImagens } from './visualizar-pdf.js';
+import { CAPAS, capaPorId, capaAutomatica, svgCapa, urlSvg, pngCapa, textosDaCapa } from './capas.js';
+import { salvarMissas } from './dados.js';
 
 let carregando = null;
 export function carregarJsPDF() {
@@ -45,8 +47,18 @@ export function exportarMissa(x) {
     <label style="display:block;margin:8px 0"><input type="checkbox" id="ac" checked> Incluir os acordes (cifra)</label>
     <label style="display:block;margin:8px 0"><input type="checkbox" id="um"> Um canto por página</label>
     <label style="display:block;margin:8px 0"><input type="checkbox" id="gr"> Letra maior (mais fácil de ler no estante)</label>
+    <label style="display:block;margin:8px 0">Capa: <select id="capa"></select></label>
+    <img id="prev-capa" alt="Prévia da capa" style="width:140px;border-radius:4px;display:block;margin:4px 0 8px;box-shadow:0 1px 4px #0003">
     <div class="barra" style="justify-content:flex-end"><button class="btn" data-fechar>Cancelar</button><button class="btn primario" id="ok">⬇ Baixar PDF</button></div>
     <p id="msg" class="pequeno suave"></p>`);
+  const selCapa = el.querySelector('#capa'), prev = el.querySelector('#prev-capa'), auto = capaAutomatica(x);
+  selCapa.innerHTML = `<option value="auto">Automática: ${esc(auto.nome)}</option>${CAPAS.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}<option value="nenhuma">Sem capa</option>`;
+  selCapa.value = x.capa || 'auto';
+  const capaEscolhida = () => (selCapa.value === 'nenhuma' ? null : selCapa.value === 'auto' ? auto : capaPorId(selCapa.value));
+  const A4 = { largura: 1240, altura: 1754 };
+  const mostrarPrevia = () => { const c = capaEscolhida(); prev.hidden = !c; if (c) prev.src = urlSvg(svgCapa(c, { ...textosDaCapa(x, c), ...A4 })); };
+  selCapa.onchange = () => { x.capa = selCapa.value; salvarMissas(); mostrarPrevia(); };
+  mostrarPrevia();
   el.querySelector('#ok').onclick = async () => {
     const msg = el.querySelector('#msg'), btn = el.querySelector('#ok');
     btn.disabled = true; msg.textContent = 'Gerando o PDF...';
@@ -59,7 +71,9 @@ export function exportarMissa(x) {
         msg.textContent = `Incluindo a cifra escaneada de “${c.nome}”...`;
         try { c.imagens = await paginasComoImagens(c.pdfImagem); } catch { c.imagens = null; }
       }
-      const doc = gerarPDF(JsPDF, dados, { acordes, umaPorPagina: el.querySelector('#um').checked, grande: el.querySelector('#gr').checked });
+      const c = capaEscolhida();
+      const capa = c ? await pngCapa(c, { ...textosDaCapa(x, c), ...A4 }) : null;
+      const doc = gerarPDF(JsPDF, dados, { acordes, umaPorPagina: el.querySelector('#um').checked, grande: el.querySelector('#gr').checked, capa });
       const nome = `${x.data || 'missa'} - ${x.titulo}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() + '.pdf';
       doc.save(nome);
       aviso('PDF gerado: ' + nome, 4000);
