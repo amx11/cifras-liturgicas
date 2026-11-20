@@ -39,7 +39,7 @@ export async function carregarAcervo() {
     const r = await fetch('data/musicas.json', { cache: 'no-cache' });
     if (r.ok) dados = await r.json();
   } catch { /* sem acervo: segue só com as músicas próprias */ }
-  estado.taxonomia = { tempos: dados.tempos || {}, partes: { ...(dados.partes || {}), 90: 'Canto a Maria' }, categorias: dados.categorias || {}, anos: dados.anos || {} };
+  estado.taxonomia = { tempos: dados.tempos || {}, partes: { ...(dados.partes || {}), 2: 'Santo', 20: 'Prece Eucarística', 90: 'Canto a Maria' }, categorias: dados.categorias || {}, anos: dados.anos || {} };
   estado.fonte = dados.fonte;
   estado.atualizado = dados.atualizado;
   // Correções revisadas (gravadas pelo servidor local em data/correcoes.json) valem para todos os aparelhos
