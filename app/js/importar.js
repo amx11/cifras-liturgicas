@@ -111,7 +111,8 @@ async function carregarPdfjs() {
 
 export function telaImportar(tela) {
   tela.innerHTML = `
-    <h1>Importar</h1>
+    <h1>Colocar cifra</h1>
+    <p class="pequeno suave" style="margin-top:-.4em">Digite ou cole a sua cifra, ou leia de foto, PDF, partitura, áudio ou YouTube. Ela fica nas suas músicas e pode entrar em qualquer missa.</p>
     <div class="cartao">
       <h2 style="margin-top:0">Foto ou PDF escaneado</h2>
       <p class="pequeno suave">Tire uma foto da folha de cifra (ou escolha a imagem / o PDF escaneado): o app lê a letra e os acordes, coloca cada acorde na sílaba certa e abre para você conferir com o original ao lado. Funciona sem internet. Várias fotos de uma vez = páginas da mesma música, na ordem escolhida.</p>
