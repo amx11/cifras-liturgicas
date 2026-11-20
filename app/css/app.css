@@ -347,3 +347,11 @@ h1 .num { min-width: 0; margin-right: .2em; }
 .d-furo.tapado { fill: #222; }
 .d-meio { fill: #222; }
 .cifra .ac { cursor: pointer; }
+/* na janelinha do acorde, desenho grande */
+.modal .lista-acordes { justify-content: center; }
+.modal .cartao-acorde { min-width: 0; max-width: none; width: 100%; padding: 10px; }
+.modal .cartao-acorde .nome-acorde { font-size: 22px; }
+.modal .diag { width: 170px; }
+.modal .diag.teclas { width: 100%; max-width: 460px; }
+.modal .diag.flauta { width: 26px; }
+.modal .legenda-acorde { font-size: 15px; }
