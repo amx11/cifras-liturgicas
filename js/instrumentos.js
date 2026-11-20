@@ -272,8 +272,46 @@ export function svgFlauta(midi) {
   return `<svg viewBox="0 0 18 100" class="diag flauta" role="img" aria-label="Digitação">${`<rect x="6" y="2" width="10" height="96" rx="5" class="d-corpo"/>`}${furos.join('')}</svg>`;
 }
 
+// ---------- Flauta transversal (sistema Boehm) ----------
+// [polegar, E1, E2, E3, Sol# (mindinho esq.), D1, D2, D3, Mi♭ (mindinho dir.), pé]; 1 = apertado; pé: 'C' ou 'C#'
+const BOEHM = {
+  60: [1, 1, 1, 1, 0, 1, 1, 1, 0, 'C'], 61: [1, 1, 1, 1, 0, 1, 1, 1, 0, 'C#'], 62: [1, 1, 1, 1, 0, 1, 1, 1, 0], 63: [1, 1, 1, 1, 0, 1, 1, 1, 1],
+  64: [1, 1, 1, 1, 0, 1, 1, 0, 1], 65: [1, 1, 1, 1, 0, 1, 0, 0, 1], 66: [1, 1, 1, 1, 0, 0, 0, 1, 1], 67: [1, 1, 1, 1, 0, 0, 0, 0, 1],
+  68: [1, 1, 1, 1, 1, 0, 0, 0, 1], 69: [1, 1, 1, 0, 0, 0, 0, 0, 1], 70: [1, 1, 0, 0, 0, 1, 0, 0, 1], 71: [1, 1, 0, 0, 0, 0, 0, 0, 1],
+  72: [0, 1, 0, 0, 0, 0, 0, 0, 1], 73: [0, 0, 0, 0, 0, 0, 0, 0, 1],
+  74: [1, 0, 1, 1, 0, 1, 1, 1, 0], 75: [1, 0, 1, 1, 0, 1, 1, 1, 1],                 // Ré e Mi♭ da 2ª oitava: 1º dedo levantado
+};
+for (let n = 76; n <= 85; n++) BOEHM[n] = BOEHM[n - 12];                            // Mi a Dó# da 2ª oitava: mesma posição, soprando mais
+export function notasTransversal(nome) {
+  const ac = analisarAcorde(nome);
+  if (!ac) return [];
+  const bem = ac.bemol || /b/.test(nome);
+  const out = []; let ant = 59;
+  for (const p of ac.pcs) {
+    let n = 60 + mod(p);
+    while (n <= ant) n += 12;
+    while (n > 85) n -= 12;
+    out.push(n); ant = n;
+  }
+  return out.map(n => ({ midi: n, nome: nomeNota(n % 12, bem), solfejo: solfejo(n % 12, bem), oitava: n >= 74 ? '2ª oitava' : '1ª oitava' }));
+}
+export function svgTransversal(midi) {
+  const d = BOEHM[midi];
+  if (!d) return '';
+  const c = (v, cx, cy, r = 3.6) => `<circle cx="${cx}" cy="${cy}" r="${r}" class="d-furo ${v ? 'tapado' : ''}"/>`;
+  const p = [`<rect x="9" y="2" width="10" height="104" rx="3" class="d-corpo-metal"/>`];
+  p.push(c(d[0], 4, 12, 3));                                    // polegar (atrás)
+  p.push(c(d[1], 14, 12), c(d[2], 14, 22), c(d[3], 14, 32));    // mão esquerda
+  p.push(`<rect x="20" y="36" width="6" height="5" rx="1.5" class="d-furo ${d[4] ? 'tapado' : ''}"/>`);   // Sol#
+  p.push(c(d[5], 14, 52), c(d[6], 14, 62), c(d[7], 14, 72));    // mão direita
+  p.push(`<rect x="20" y="76" width="6" height="5" rx="1.5" class="d-furo ${d[8] ? 'tapado' : ''}"/>`);   // Mi♭
+  p.push(`<rect x="9" y="88" width="10" height="5" rx="1.5" class="d-furo ${d[9] === 'C#' ? 'tapado' : ''}"/>`);
+  p.push(`<rect x="9" y="96" width="10" height="5" rx="1.5" class="d-furo ${d[9] === 'C' ? 'tapado' : ''}"/>`);
+  return `<svg viewBox="0 0 28 108" class="diag flauta transversal" role="img" aria-label="Digitação da flauta transversal">${p.join('')}</svg>`;
+}
+
 // ---------- Cartões ----------
-export const INSTRUMENTOS = [['violao', 'Violão'], ['teclado', 'Teclado'], ['orgao', 'Órgão'], ['flauta', 'Flauta']];
+export const INSTRUMENTOS = [['violao', 'Violão'], ['teclado', 'Teclado'], ['orgao', 'Órgão'], ['flauta', 'Flauta doce'], ['transversal', 'Flauta transversal']];
 const escH = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export function cartaoAcorde(nome, instrumento, vozes) {
   let corpo = '', legenda = '';
@@ -287,6 +325,10 @@ export function cartaoAcorde(nome, instrumento, vozes) {
   } else if (instrumento === 'flauta') {
     const ns = notasFlauta(nome);
     corpo = `<div class="flauta-notas">${ns.map(n => `<div class="flauta-nota">${svgFlauta(n.midi)}<div class="pequeno"><b>${escH(n.nome)}</b><br>${escH(n.solfejo)}</div></div>`).join('')}</div>`;
+    legenda = 'arpejo do acorde';
+  } else if (instrumento === 'transversal') {
+    const ns = notasTransversal(nome);
+    corpo = `<div class="flauta-notas">${ns.map(n => `<div class="flauta-nota">${svgTransversal(n.midi)}<div class="pequeno"><b>${escH(n.nome)}</b><br>${escH(n.solfejo)}<br><span class="suave">${n.oitava}</span></div></div>`).join('')}</div>`;
     legenda = 'arpejo do acorde';
   }
   return `<div class="cartao-acorde ${instrumento}"><div class="nome-acorde">${escH(nome)}</div>${corpo || '<span class="suave pequeno">?</span>'}${legenda ? `<div class="legenda-acorde pequeno">${legenda}</div>` : ''}</div>`;
