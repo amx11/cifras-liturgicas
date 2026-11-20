@@ -2,7 +2,7 @@
 import { estado, carregarAcervo, musica, buscar, versoes, rotuloVersao, salvarPrefs, salvarTons, editarMusica, desfazerEdicao,
   excluirMinha, salvarMinha, criarPersonalizada, salvarCorrecao, exportarBackup, importarBackup } from './dados.js';
 import { renderizarHTML, renderizarTexto, semitonsEntre, preferirBemol, transporTom, textoParaChordPro,
-  ehLinhaDeAcordes, chordproNoTom } from './cifra.js';
+  ehLinhaDeAcordes, chordproNoTom, transporAcorde } from './cifra.js';
 import { esc, aviso, modal, confirmar, ORDEM_TEMPOS, ORDEM_PARTES, COR_TEMPO, nomeTempo, nomeParte,
   listaAlfabetica, itemMusica, baixarArquivo, irPara } from './ui.js';
 import { telaMissas, telaMissa, escolherMissaPara, missaAtiva, foco, definirFoco, adicionarComAviso, listaVersoes, novaMissa, missaAutomatica } from './missas.js';
@@ -13,6 +13,7 @@ import { telaTocar, sairTocar } from './tocar.js';
 import { telaOuvir, pararOuvir } from './ouvir.js';
 import { telaAfinador, pararAfinador } from './afinador.js';
 import { telaSumario } from './sumario.js';
+import { INSTRUMENTOS, cartaoAcorde, vozesTeclado } from './instrumentos.js';
 
 const tela = document.getElementById('tela');
 const TONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -47,8 +48,10 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
         <div class="barra" style="margin:0">
           <button class="btn peq" data-semi="-1" title="Meio tom abaixo">−½</button>
           <button class="btn peq" data-semi="1" title="Meio tom acima">+½</button>
+          <span class="instrumentos" role="group" aria-label="Ver os acordes no instrumento"><span class="pequeno suave">Acordes no:</span>${INSTRUMENTOS.map(([k, v]) => `<button type="button" class="btn peq${estado.prefs.instrumento === k ? ' primario' : ''}" data-instrumento="${k}" aria-pressed="${estado.prefs.instrumento === k}">${v}</button>`).join('')}</span>
           <span class="pequeno suave">Original: <b>${esc(original)}</b>${m.outrosTons?.length ? ` (o PDF da arquidiocese traz também em ${m.outrosTons.map(esc).join(', ')})` : ''}${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
         </div></div>` : ''}
+      ${m.chordpro && original && estado.prefs.instrumento ? `<div class="diagramas nao-imprimir" aria-label="Acordes da música no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}">${diagramas(acordesDaMusica(m.chordpro, semi, bemol), estado.prefs.instrumento)}</div>` : ''}
       ${m.museScore && !m.daPartitura?.formato?.startsWith('musescore') ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com o arquivo MuseScore da arquidiocese (acorde e sílaba nota a nota)${m.museScore.movidos ? ` — ${m.museScore.movidos} ${m.museScore.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'}` : ''}${m.museScore.estrofes ? ` — acordes de ${m.museScore.estrofes} ${m.museScore.estrofes === 1 ? 'estrofe completados' : 'estrofes completados'}` : ''}.</p>` : ''}
       ${m.conferida && !m.daPartitura && !m.museScore ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
       ${m.daPartitura && m.originalPdf ? `<div class="ocr-aviso nao-imprimir">
@@ -69,8 +72,24 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
     if (esc_) requestAnimationFrame(() => desenharPDF(m.pdfImagem, esc_));
   };
   wrap.addEventListener('click', e => {
+    // tocar no nome do acorde na cifra: mostra o desenho dele (no instrumento escolhido; sem escolha, no violão)
+    const ac = e.target.closest('.cifra .ac');
+    if (ac) {
+      const semi = original && alvo ? semitonsEntre(original, alvo) : 0;
+      const seq = acordesDaMusica(m.chordpro || '', semi, preferirBemol(alvo || original));
+      const nome = ac.textContent.trim().replace(/^\(|\)$/g, '');
+      const inst = estado.prefs.instrumento || 'violao';
+      modal(`<div class="barra" style="justify-content:space-between;margin-top:0"><b>${esc(nome)}</b><button class="btn peq" data-fechar>Fechar</button></div>
+        ${diagramas(seq.includes(nome) ? seq : [nome], inst, nome)}
+        <p class="pequeno suave">Escolha o instrumento em “Acordes no:”, em cima da cifra.</p>`);
+      return;
+    }
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.instrumento) {
+      estado.prefs.instrumento = estado.prefs.instrumento === b.dataset.instrumento ? null : b.dataset.instrumento;
+      salvarPrefs(); desenhar(); return;
+    }
     if (b.hasAttribute('data-ver-original')) {
       const box = wrap.querySelector('.original-escaneado');
       box.hidden = !box.hidden;
@@ -89,6 +108,26 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
   wrap.tom = () => alvo;
   desenhar();
   return wrap;
+}
+
+// Acordes da música, na ordem em que aparecem, já no tom escolhido (sem repetir; sem "/F" de baixo sozinho)
+function acordesDaMusica(chordpro, semi, bemol) {
+  const seq = [];
+  for (const x of chordpro.matchAll(/\[([^\]]+)\]/g)) {
+    const a = x[1].trim().replace(/^\(|\)$/g, '');
+    if (!/^[A-G]/.test(a)) continue;
+    seq.push(transporAcorde(a, semi, bemol));
+  }
+  return seq;
+}
+// cartões dos acordes; teclado e órgão: inversão escolhida pela ordem da música (perto do acorde anterior)
+function diagramas(seq, instrumento, so = null) {
+  const vozes = instrumento === 'teclado' || instrumento === 'orgao' ? vozesTeclado(seq, instrumento) : null;
+  const distintos = so ? [so] : [...new Set(seq)];
+  const legenda = instrumento === 'teclado' ? '<div class="pequeno suave legenda-cores"><span class="cor-me">■ mão esquerda (baixo)</span> <span class="cor-md">■ mão direita (inversão mais perto do acorde anterior)</span></div>'
+    : instrumento === 'orgao' ? '<div class="pequeno suave legenda-cores"><span class="cor-pedal">■ pedal</span> <span class="cor-me">■ mão esquerda (acorde)</span> · mão direita livre para a melodia</div>'
+    : instrumento === 'flauta' ? '<div class="pequeno suave legenda-cores">Flauta doce soprano, digitação barroca: ● tapado ○ aberto ◐ meio; o 1º furo é o do polegar (atrás).</div>' : '';
+  return `${legenda}<div class="lista-acordes">${distintos.map(n => cartaoAcorde(n, instrumento, vozes)).join('')}</div>`;
 }
 
 // Sugestão de capotraste: formas fáceis (C, G, D, A, E / Am, Em, Dm) com capotraste até a 5ª casa

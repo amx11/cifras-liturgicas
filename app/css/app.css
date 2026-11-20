@@ -315,3 +315,35 @@ h1 .num { min-width: 0; margin-right: .2em; }
 .oe-texto { margin-top: .5em; }
 .oe-quadro { width: 100%; height: 70vh; border: 1px solid var(--linha); border-radius: 6px; background: #fff; display: block; }
 .missa-slot select[data-acao="oe"] { margin-top: .3em; max-width: 100%; }
+
+/* Acordes nos instrumentos (violão, teclado, órgão, flauta) */
+.instrumentos { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-right: 8px; }
+.diagramas { margin: 8px 0 12px; }
+.lista-acordes { display: flex; flex-wrap: wrap; gap: 8px; }
+.cartao-acorde { background: var(--cartao, #fff); border: 1px solid var(--linha); border-radius: 8px; padding: 6px 8px; text-align: center; min-width: 84px; }
+.cartao-acorde.teclado, .cartao-acorde.orgao { min-width: 150px; max-width: 220px; }
+.cartao-acorde .nome-acorde { font-weight: 700; color: var(--acorde); font-size: 15px; }
+.cartao-acorde .legenda-acorde { margin-top: 2px; line-height: 1.3; }
+.diag { display: block; margin: 2px auto; width: 92px; height: auto; }
+.diag.teclas { width: 100%; max-width: 210px; }
+.diag.flauta { width: 16px; }
+.d-corda, .d-traste { stroke: var(--texto, #222); stroke-width: 1; }
+.d-pestana-nut { stroke: var(--texto, #222); stroke-width: 3.5; }
+.d-dedo { fill: var(--texto, #222); }
+.d-solta { fill: none; stroke: var(--texto, #222); stroke-width: 1.2; }
+.d-x, .d-casa, .d-cifra, .d-txt { fill: var(--suave, #666); font-size: 10px; font-family: system-ui, sans-serif; }
+.d-x { font-size: 12px; }
+.d-branca { fill: #fff; stroke: #555; stroke-width: .6; }
+.d-preta { fill: #222; stroke: #222; stroke-width: .6; }
+.d-me { fill: #2f6db5 !important; }
+.d-md { fill: #2e8b57 !important; }
+.d-pedal { fill: #c27c0e !important; }
+.cor-me { color: #2f6db5; } .cor-md { color: #2e8b57; } .cor-pedal { color: #c27c0e; }
+.legenda-cores { margin-bottom: 4px; } .legenda-cores span { margin-right: 10px; }
+.flauta-notas { display: flex; gap: 8px; justify-content: center; }
+.flauta-nota { text-align: center; }
+.d-corpo { fill: #f3e7cf; stroke: #a08050; stroke-width: .8; }
+.d-furo { fill: #fff; stroke: #333; stroke-width: .8; }
+.d-furo.tapado { fill: #222; }
+.d-meio { fill: #222; }
+.cifra .ac { cursor: pointer; }
