@@ -167,13 +167,15 @@ function montarIndice() {
   const todas = [...estado.base, ...estado.minhas.map(m => ({ ...m, origem: 'minha' }))];
   for (const m of todas) nomear(m);
   for (const m of todas) {
+    // ordem e número vêm do nome do acervo: renomear no aparelho não muda o número de nenhuma música
+    m.nomeAcervo = m.nome;
     const ed = estado.edicoes[m.chave];
     if (ed) Object.assign(m, ed, { editada: true });
     if (m.chordpro && !m.tom) m.tom = detectarTom(m.chordpro);
     m.buscaTitulo = normalizar(`${m.numero ?? ''} ${m.nome} ${m.complemento || ''}`);
     m.buscaLetra = normalizar(m.chordpro || '');
   }
-  todas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+  todas.sort((a, b) => (a.nomeAcervo || a.nome).localeCompare(b.nomeAcervo || b.nome, 'pt-BR', { sensitivity: 'base' })
     || (a.origem === 'minha') - (b.origem === 'minha') || (parseInt(a.numero) || 1e9) - (parseInt(b.numero) || 1e9)
     || (a.criada || '').localeCompare(b.criada || ''));
   // Versões: mesma letra/título com melodias diferentes ficam no mesmo grupo;

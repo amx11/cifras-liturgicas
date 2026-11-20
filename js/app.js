@@ -255,7 +255,7 @@ function telaMusica(chave) {
   const partes = (m.partes || []).map(nomeParte).filter(Boolean).join(' · ');
   tela.innerHTML = `
     <div class="cifra-topo">
-      <div><h1>${m.num ? `<span class="num">${m.num}</span> ` : ''}${esc(m.nome)}</h1>
+      <div><h1>${m.num ? `<span class="num">${m.num}</span> ` : ''}${esc(m.nome)} <button class="btn peq nao-imprimir" id="renomear" title="Editar o nome e a linha de baixo (autor, complemento)">✎ Nome</button></h1>
         ${m.complemento ? `<div class="suave">${esc(m.complemento)}</div>` : ''}
         <div class="pequeno suave">${esc((m.tempos || []).map(nomeTempo).join(' · '))}${partes ? ' — ' + esc(partes) : ''}</div></div>
     </div>
@@ -284,6 +284,32 @@ function telaMusica(chave) {
   tela.querySelector('#painel').append(painel);
   const redesenhar = () => telaMusica(chave);
 
+  tela.querySelector('#renomear').onclick = () => {
+    const ed = estado.edicoes[m.chave] || {};
+    const mudou = ed.nome != null || ed.complemento != null;
+    const { el, fechar } = modal(`<h2 style="margin-top:0">Nome da música</h2>
+      <label class="campo"><span>Nome</span><input type="text" id="n-nome" value="${esc(m.nome)}"></label>
+      <label class="campo"><span>Linha de baixo (autor, intérprete, complemento)</span><input type="text" id="n-comp" value="${esc(m.complemento || '')}"></label>
+      <p class="pequeno suave">Vale para a busca, a lista, as missas e os slides. Fica salvo neste aparelho (vai junto no backup).</p>
+      <div class="barra" style="justify-content:space-between">
+        ${mudou ? '<button class="btn" id="n-original">Voltar ao original</button>' : '<span></span>'}
+        <span><button class="btn" data-fechar>Cancelar</button> <button class="btn primario" id="n-ok">Salvar</button></span>
+      </div>`);
+    el.querySelector('#n-nome').focus();
+    el.querySelector('#n-ok').onclick = () => {
+      const nome = el.querySelector('#n-nome').value.trim(), complemento = el.querySelector('#n-comp').value.trim();
+      if (!nome) { aviso('O nome não pode ficar vazio'); return; }
+      if (!editarMusica(m.chave, { nome, complemento })) { aviso('Não foi possível salvar'); return; }
+      fechar(); aviso('Nome salvo'); telaMusica(m.chave);
+    };
+    el.querySelector('#n-original')?.addEventListener('click', async () => {
+      if (m.origem === 'minha') return;
+      const e2 = { ...(estado.edicoes[m.chave] || {}) }; delete e2.nome; delete e2.complemento;
+      if (Object.keys(e2).filter(k => !['tom', 'temCifra'].includes(k)).length) { estado.edicoes[m.chave] = e2; editarMusica(m.chave, {}); }
+      else await desfazerEdicao(m.chave);
+      fechar(); aviso('Nome original de volta'); telaMusica(m.chave);
+    });
+  };
   tela.querySelector('#add-missa').onclick = () => {
     const ativa = missaAtiva();
     if (ativa) adicionarComAviso(ativa, m, painel.tom()); else escolherMissaPara(m, painel.tom());
