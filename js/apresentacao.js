@@ -6,7 +6,7 @@ import { linhasCifra } from './cifra.js';
 import { esc, aviso, modal } from './ui.js';
 import { carregarJsPDF } from './exportar.js';
 import { CAPAS, capaPorId, capaAutomatica, capaDaMissa, temaDaCapa, svgCapa, urlSvg, pngCapa, textosDaCapa } from './capas.js';
-import { salvarMissas } from './dados.js';
+import { salvarMissas, estado } from './dados.js';
 
 // ---------- Slides ----------
 // Só a letra que se canta: sem número da estrofe, "R.", rótulo de quem canta (S:, T:, Todos:, Solo:), notas para o
@@ -37,7 +37,7 @@ function limparLinha(t) {
   return s.trim();
 }
 // linha comprida demais para o telão: quebra na pontuação mais perto do meio (senão no espaço)
-function quebrar(l, max = 46) {
+function quebrar(l, max = 38) {
   if (l.length <= max) return [l];
   const meio = l.length / 2;
   const cortes = [...l.matchAll(/[,;:!?]\s/g)].map(m => m.index + 1);
@@ -75,7 +75,7 @@ function dividir(linhas, max) {
 export function slidesDaMissa(x, { titulos = false, repetirRefrao = true, maxLinhas = 6, soPrimeira = true, escuro = true, capa = null } = {}) {
   const slides = [];
   const data = x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
-  if (capa) slides.push({ tipo: 'capa', capa, ...textosDaCapa(x, capa) });   // capa desenhada (do tempo ou escolhida)
+  if (capa) slides.push({ tipo: 'capa', capa, ...textosDaCapa(x, capa, estado.prefs.paroquia) });   // capa desenhada (do tempo ou escolhida)
   for (const it of x.itens) {
     const m = it.chave && musica(it.chave);
     if (!m?.chordpro) continue;
@@ -111,7 +111,7 @@ export function apresentacaoMissa(x) {
     <label style="display:block;margin:6px 0">Linhas por slide: <select id="ml"><option>4</option><option>5</option><option selected>6</option><option>8</option></select></label>
     <label style="display:block;margin:6px 0">Capa: <select id="capa"></select></label>
     <img id="prev-capa" alt="Prévia da capa" style="width:100%;max-width:360px;border-radius:6px;display:block;margin:4px 0 8px">
-    <label style="display:block;margin:6px 0">Cores: <select id="tema"><option value="tempo" selected>do tempo litúrgico (iguais à capa)</option><option value="escuro">letra branca, fundo preto</option><option value="claro">letra preta, fundo branco</option><option value="azul">letra branca, fundo azul</option></select></label>
+    <label style="display:block;margin:6px 0">Cores: <select id="tema"><option value="tempo" selected>projetor na parede: fundo preto, refrão na cor do tempo (recomendado)</option><option value="escuro">fundo preto, refrão dourado</option><option value="claro">fundo branco, letra preta (só para TV ou tela)</option><option value="azul">fundo azul, letra branca</option></select></label>
     <div class="barra" style="flex-wrap:wrap">
       <button class="btn primario" id="agora">▶ Apresentar agora</button>
       <button class="btn" id="pptx">⬇ PowerPoint (.pptx)</button>
@@ -125,7 +125,7 @@ export function apresentacaoMissa(x) {
   selCapa.innerHTML = `<option value="auto">Automática: ${esc(auto.nome)}</option>${CAPAS.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}<option value="nenhuma">Sem capa</option>`;
   selCapa.value = x.capa || 'auto';
   const capaEscolhida = () => (selCapa.value === 'nenhuma' ? null : selCapa.value === 'auto' ? auto : capaPorId(selCapa.value));
-  const mostrarPrevia = () => { const c = capaEscolhida(); prev.hidden = !c; if (c) prev.src = urlSvg(svgCapa(c, { ...textosDaCapa(x, c), largura: 1600, altura: 900 })); };
+  const mostrarPrevia = () => { const c = capaEscolhida(); prev.hidden = !c; if (c) prev.src = urlSvg(svgCapa(c, { ...textosDaCapa(x, c, estado.prefs.paroquia), largura: 1600, altura: 900, projetor: true })); };
   selCapa.onchange = () => { x.capa = selCapa.value; salvarMissas(); mostrarPrevia(); };
   mostrarPrevia();
   const opcoes = () => ({ capa: capaEscolhida(), titulos: el.querySelector('#ti').checked, repetirRefrao: el.querySelector('#rr').checked, maxLinhas: +el.querySelector('#ml').value, soPrimeira: el.querySelector('#sp').checked, escuro: el.querySelector('#es').checked });
@@ -154,7 +154,7 @@ export const TEMAS = {
 
 // ---------- Tela cheia no app ----------
 // tamanho da letra: o maior que cabe (pelo nº de linhas e pela linha mais comprida)
-const tamanho = (linhas, larg, alt) => Math.max(18, Math.min(alt * 0.78 / (linhas.length * 1.32), larg * 0.92 / (Math.max(...linhas.map(l => l.length)) * 0.52), alt / 6));
+const tamanho = (linhas, larg, alt) => Math.max(18, Math.min(alt / (linhas.length * 1.38), larg / (Math.max(...linhas.map(l => l.length)) * 0.56), alt / 5.5));
 export function apresentar(slides, tema = TEMAS.escuro) {
   let i = 0, preto = false;
   const tela = document.createElement('div');
@@ -164,18 +164,17 @@ export function apresentar(slides, tema = TEMAS.escuro) {
   document.body.append(tela);
   const desenhar = () => {
     const s = slides[i];
-    const W = tela.clientWidth * 0.92, H = tela.clientHeight * 0.86;
+    const W = tela.clientWidth * 0.8, H = tela.clientHeight * 0.8;     // margem de 10%: projeção na parede costuma ficar torta
     tela.style.background = '#' + (s.tipo === 'vazio' || preto ? '000000' : tema.fundo);
     if (preto || s.tipo === 'vazio') { tela.innerHTML = ''; return; }
     let html = '';
-    if (s.tipo === 'capa') { tela.style.background = s.capa.fundo[0]; tela.innerHTML = svgCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, largura: 1600, altura: 900 }).replace('<svg ', '<svg style="width:100%;height:100%" preserveAspectRatio="xMidYMid slice" '); return; }
+    if (s.tipo === 'capa') { tela.style.background = '#000'; tela.innerHTML = svgCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, linha4: s.linha4, largura: 1600, altura: 900, projetor: true }).replace('<svg ', '<svg style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet" '); return; }
     else if (s.tipo === 'titulo') html = `<div><div style="font-size:${Math.min(W / 28, 36)}px;color:#${tema.suave};text-transform:uppercase;letter-spacing:.08em">${esc(s.parte)}</div><div style="font-size:${Math.min(W / 16, 64)}px;font-weight:700;margin-top:.3em">${esc(s.titulo)}</div></div>`;
     else {
       const fs = tamanho(s.linhas, W, H);
-      html = `<div style="font-size:${fs}px;line-height:1.3;${s.refrao ? `color:#${tema.refrao};font-weight:700` : ''}">${s.linhas.map(esc).join('<br>')}</div>
-        <div style="position:absolute;bottom:1.5vh;left:0;right:0;font-size:max(12px,1.6vh);color:#${tema.suave}">${esc(s.parte)} · ${esc(s.titulo)}</div>`;
+      html = `<div style="font-size:${fs}px;line-height:1.35;font-weight:${tema.negrito ? 700 : 600};${s.refrao ? `color:#${tema.refrao}` : ''}">${s.linhas.map(esc).join('<br>')}</div>`;
     }
-    tela.innerHTML = html + `<div style="position:absolute;bottom:1.5vh;right:2vw;font-size:max(11px,1.4vh);color:#${tema.suave}">${i + 1}/${slides.length}</div>`;
+    tela.innerHTML = html;
   };
   const ir = d => { const n = Math.min(slides.length - 1, Math.max(0, i + d)); if (n !== i) { i = n; preto = false; desenhar(); } };
   const sair = () => { document.removeEventListener('keydown', tecla); window.removeEventListener('resize', desenhar); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); tela.remove(); };
@@ -215,7 +214,7 @@ function carregarPptx() {
   return pptxCarregando;
 }
 // tamanho em pontos para um quadro de 9,2 x 4,6 polegadas
-const pontos = linhas => Math.max(20, Math.min(54, 4.6 * 72 * 0.8 / (linhas.length * 1.25), 9.2 * 72 / (Math.max(...linhas.map(l => l.length)) * 0.5)));
+const pontos = linhas => Math.max(20, Math.min(54, 4.5 * 72 * 0.82 / (linhas.length * 1.3), 8 * 72 / (Math.max(...linhas.map(l => l.length)) * 0.56)));
 export async function gerarPptx(slides, tema, nome, { baixar = true } = {}) {
   const Pptx = await carregarPptx();
   const p = new Pptx();
@@ -226,14 +225,13 @@ export async function gerarPptx(slides, tema, nome, { baixar = true } = {}) {
     sl.background = { color: s.tipo === 'vazio' ? '000000' : tema.fundo };
     if (s.tipo === 'vazio') continue;
     if (s.tipo === 'capa') {
-      sl.addImage({ data: await pngCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, largura: 1920, altura: 1080 }), x: 0, y: 0, w: 10, h: 5.625 });
+      sl.addImage({ data: await pngCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, linha4: s.linha4, largura: 1920, altura: 1080, projetor: true }), x: 0, y: 0, w: 10, h: 5.625 });
     } else if (s.tipo === 'titulo') {
       sl.addText(s.parte.toUpperCase(), { x: 0.4, y: 1.5, w: 9.2, h: 0.6, align: 'center', fontSize: 22, color: tema.suave, fontFace: 'Arial', charSpacing: 2 });
       sl.addText(s.titulo, { x: 0.4, y: 2.1, w: 9.2, h: 1.5, align: 'center', valign: 'middle', fontSize: 40, bold: true, color: tema.texto, fontFace: 'Arial', fit: 'shrink' });
     } else {
-      sl.addText(s.linhas.join('\n'), { x: 0.4, y: 0.35, w: 9.2, h: 4.6, align: 'center', valign: 'middle', fontSize: Math.round(pontos(s.linhas)),
-        bold: s.refrao, color: s.refrao ? tema.refrao : tema.texto, fontFace: 'Arial', fit: 'shrink', lineSpacingMultiple: 1.1 });
-      sl.addText(`${s.parte} · ${s.titulo}`, { x: 0.4, y: 5.1, w: 9.2, h: 0.35, align: 'center', fontSize: 11, color: tema.suave, fontFace: 'Arial' });
+      sl.addText(s.linhas.join('\n'), { x: 1, y: 0.56, w: 8, h: 4.5, align: 'center', valign: 'middle', fontSize: Math.round(pontos(s.linhas)),
+        bold: true, color: s.refrao ? tema.refrao : tema.texto, fontFace: 'Arial', fit: 'shrink', lineSpacingMultiple: 1.15 });
     }
   }
   if (!baixar) return p.write({ outputType: 'blob' });
@@ -247,7 +245,7 @@ export async function gerarPdfSlides(slides, tema, nome, { baixar = true } = {})
   const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: [A, L] });
   const cor = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   const capas = new Map();
-  for (const s of slides) if (s.tipo === 'capa') capas.set(s, await pngCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, largura: 1920, altura: 1080 }));
+  for (const s of slides) if (s.tipo === 'capa') capas.set(s, await pngCapa(s.capa, { titulo: s.titulo, linha2: s.linha2, linha3: s.linha3, linha4: s.linha4, largura: 1920, altura: 1080, projetor: true }));
   slides.forEach((s, k) => {
     if (k) doc.addPage([A, L], 'landscape');
     if (s.tipo === 'capa') { doc.addImage(capas.get(s), 'JPEG', 0, 0, L, A); return; }
@@ -255,13 +253,12 @@ export async function gerarPdfSlides(slides, tema, nome, { baixar = true } = {})
     if (s.tipo === 'vazio') return;
     const centro = (texto, y, tam, estilo = 'normal', c = tema.texto) => { doc.setFont('helvetica', estilo); doc.setFontSize(tam); doc.setTextColor(...cor(c)); doc.text(texto, L / 2, y, { align: 'center', baseline: 'middle' }); };
     if (s.tipo === 'titulo') { centro(s.parte.toUpperCase(), A / 2 - 14, 20, 'normal', tema.suave); centro(s.titulo, A / 2 + 4, 36, 'bold'); return; }
-    // maior tamanho que cabe: altura (linhas) e largura (linha mais larga)
-    let tam = Math.min(54, (A * 0.78) / (s.linhas.length * 1.3) / 0.3528);
-    doc.setFont('helvetica', s.refrao ? 'bold' : 'normal');
-    while (tam > 16) { doc.setFontSize(tam); if (Math.max(...s.linhas.map(l => doc.getTextWidth(l))) <= L * 0.92) break; tam -= 1; }
-    const passo = tam * 0.3528 * 1.3, y0 = A / 2 - (passo * (s.linhas.length - 1)) / 2 - 4;
-    s.linhas.forEach((l, j) => centro(l, y0 + j * passo, tam, s.refrao ? 'bold' : 'normal', s.refrao ? tema.refrao : tema.texto));
-    centro(`${s.parte} · ${s.titulo}`, A - 6, 10, 'normal', tema.suave);
+    // maior tamanho que cabe em 80% da largura e da altura (margem para a projeção torta), sempre em negrito
+    let tam = Math.min(54, (A * 0.8) / (s.linhas.length * 1.35) / 0.3528);
+    doc.setFont('helvetica', 'bold');
+    while (tam > 16) { doc.setFontSize(tam); if (Math.max(...s.linhas.map(l => doc.getTextWidth(l))) <= L * 0.8) break; tam -= 1; }
+    const passo = tam * 0.3528 * 1.35, y0 = A / 2 - (passo * (s.linhas.length - 1)) / 2;
+    s.linhas.forEach((l, j) => centro(l, y0 + j * passo, tam, 'bold', s.refrao ? tema.refrao : tema.texto));
   });
   if (!baixar) return doc.output('blob');
   doc.save(nome);
