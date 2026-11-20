@@ -4,6 +4,8 @@ import { esc, aviso, modal, confirmar, irPara, ORDEM_TEMPOS, COR_TEMPO, nomeTemp
 import { painelCifra, telaEditar } from './app.js';
 import { chordproNoTom } from './cifra.js';
 import { exportarMissa } from './exportar.js';
+import { listarFolhetos, folhetoDaData, pdfDoFolheto, sincronizarFolhetos, removerFolheto } from './folheto.js';
+import { desenharPDF } from './visualizar-pdf.js';
 
 // Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
 const ROTEIRO = [
@@ -191,6 +193,97 @@ export function itensDoRepertorio(rep) {
   return { itens, fora };
 }
 
+// ---------- Folheto "O Dia do Senhor" (guardado no aparelho) ----------
+// canto do folheto pelo número (o mesmo das cifras da Arquidiocese)
+const musicaDoNumero = num => estado.musicas.find(m => m.origem === 'arquipoa' && +m.numero === num && m.id < 100000)
+  || estado.musicas.find(m => m.origem === 'arquipoa' && +m.numero === num) || null;
+const parteDoFolheto = (c, m) => c.parte ?? m?.partes?.find(p => ROTULO_PARTE[p]) ?? null;
+const baseRotulo = it => (it.rotulo || '').replace(/\s*\(\d+\)$/, '');
+// cantos do folheto que estão (ou não) na missa
+export function cantosDoFolhetoNaMissa(x, fol) {
+  return fol.cantos.map(c => {
+    const m = musicaDoNumero(c.num);
+    const i = m ? x.itens.findIndex(it => it.chave && musica(it.chave)?.grupo === m.grupo) : -1;
+    return { ...c, m, parte: parteDoFolheto(c, m), naMissa: i >= 0 };
+  });
+}
+export const numerosDoFolheto = fol => new Set(fol.cantos.map(c => c.num));
+export const ehDoFolheto = (m, nums) => !!m && versoes(m).some(v => v.origem === 'arquipoa' && nums.has(+v.numero));
+// Põe os cantos do folheto na missa: o que já está vira a 1ª opção da sua parte; o que falta entra na parte vazia
+// ou numa linha nova depois da mesma parte. Devolve quantos entraram.
+export function aplicarFolheto(itens, fol) {
+  const marcados = new Set();
+  let novos = 0;
+  for (const c of fol.cantos) {
+    const m = musicaDoNumero(c.num);
+    if (!m) continue;
+    const parte = parteDoFolheto(c, m);
+    const i = itens.findIndex(it => it.chave && musica(it.chave)?.grupo === m.grupo);
+    if (i >= 0) {
+      const base = baseRotulo(itens[i]);
+      const j = itens.findIndex(it => baseRotulo(it) === base && !marcados.has(it));
+      if (j >= 0 && j < i) {
+        const a = itens[i], b = itens[j];
+        [a.chave, b.chave] = [b.chave, a.chave]; [a.tom, b.tom] = [b.tom, a.tom];
+        marcados.add(b);
+      } else marcados.add(itens[i]);
+      continue;
+    }
+    const vazio = itens.find(it => !it.chave && it.parte === parte);
+    if (vazio) { vazio.chave = m.chave; vazio.tom = null; marcados.add(vazio); novos++; continue; }
+    const rot = ROTULO_PARTE[parte] || 'Canto';
+    const k = itens.map(it => it.parte).lastIndexOf(parte);
+    const fim = itens.findIndex(it => /^final/i.test(baseRotulo(it)));
+    const n = itens.filter(it => baseRotulo(it) === rot).length;
+    const novo = { rotulo: n ? `${rot} (${n + 1})` : rot, parte, chave: m.chave, tom: null };
+    itens.splice(k >= 0 ? k + 1 : fim >= 0 ? fim : itens.length, 0, novo);
+    marcados.add(novo); novos++;
+  }
+  return novos;
+}
+const dataCurta = d => new Date(d + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+// Botão "Folheto" (abre dentro do app, como o vídeo) e cantos do folheto; alvo = elemento onde desenhar
+function cartaoFolheto(fol, x) {
+  const cantos = x ? cantosDoFolhetoNaMissa(x, fol) : fol.cantos.map(c => { const m = musicaDoNumero(c.num); return { ...c, m, parte: parteDoFolheto(c, m) }; });
+  const faltam = x ? cantos.filter(c => c.m && !c.naMissa).length : 0;
+  return `<div class="cartao folheto-cartao" data-folheto="${esc(fol.data)}">
+    <div class="barra" style="margin:0;justify-content:space-between;align-items:center">
+      <div><b>📄 Folheto O Dia do Senhor</b> · ${esc(fol.titulo)} <span class="pequeno suave">(${esc(dataCurta(fol.data))})</span></div>
+      <div class="barra" style="margin:0">
+        <button class="btn peq primario" data-folheto-acao="ver">Folheto ▾</button>
+        ${faltam ? `<button class="btn peq" data-folheto-acao="por">Pôr na missa os ${faltam} que faltam</button>` : ''}
+        ${x ? '' : `<button class="btn peq" data-folheto-acao="missa">Montar a missa</button><button class="btn peq perigo" data-folheto-acao="remover" title="Tirar do aparelho">✕</button>`}
+      </div></div>
+    <div class="pequeno" style="margin-top:.4em">${cantos.length ? cantos.map(c => `<span class="folheto-canto${x && !c.naMissa ? ' falta' : ''}">nº ${c.num}${c.m ? ` ${c.m.chave ? `<a href="#/musica/${esc(c.m.chave)}">${esc(c.m.nome)}</a>` : ''}` : ' (não está no acervo)'}${c.parte && ROTULO_PARTE[c.parte] ? ` <span class="suave">· ${esc(ROTULO_PARTE[c.parte])}</span>` : ''}${x ? (c.naMissa ? ' ✓' : c.m ? ' <span class="suave">(fora da missa)</span>' : '') : ''}</span>`).join('') : '<span class="suave">Não achei cantos indicados neste folheto.</span>'}</div>
+    <div class="folheto-paginas" hidden></div>
+  </div>`;
+}
+function ligarFolheto(raiz, fol, { aoPor, aoRemover } = {}) {
+  const c = raiz.querySelector(`[data-folheto="${CSS.escape(fol.data)}"]`);
+  if (!c) return;
+  const pags = c.querySelector('.folheto-paginas');
+  c.addEventListener('click', async e => {
+    const b = e.target.closest('[data-folheto-acao]'); if (!b) return;
+    const acao = b.dataset.folhetoAcao;
+    if (acao === 'ver') {
+      pags.hidden = !pags.hidden;
+      b.textContent = pags.hidden ? 'Folheto ▾' : 'Fechar folheto ▴';
+      if (!pags.hidden && !pags.dataset.ok) {
+        pags.dataset.ok = '1';
+        const pdf = await pdfDoFolheto(fol.data);
+        if (pdf) desenharPDF(pdf, pags, 'o folheto'); else pags.innerHTML = '<p class="vazio">O PDF deste folheto não está mais no aparelho. Sincronize de novo.</p>';
+      }
+    }
+    if (acao === 'por') aoPor?.();
+    if (acao === 'missa') {
+      const ja = estado.missas.find(y => folhetoDaData([fol], y.data));
+      if (ja) location.hash = '#/missa/' + ja.id; else novaMissa(null, { data: fol.data });
+    }
+    if (acao === 'remover' && await confirmar(`Tirar do aparelho o folheto “${fol.titulo}” (${dataCurta(fol.data)})?`, 'Tirar')) { await removerFolheto(fol.data); aoRemover?.(); }
+  });
+}
+
 // ---------- Lista de missas ----------
 export function telaMissas(tela) {
   const missas = estado.missas.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));
@@ -201,14 +294,38 @@ export function telaMissas(tela) {
       <span class="info"><span class="nome">${esc(x.titulo)}</span>
         <div class="comp">${x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : ''} · ${x.itens.filter(i => i.chave).length} cantos</div>
         <div class="selos">${x.tempo ? `<span class="selo tempo" style="--cor:${COR_TEMPO[x.tempo]}">${esc(nomeTempo(x.tempo))}</span>` : ''}${x.ano ? `<span class="selo">${esc(estado.taxonomia.anos[x.ano] || '')}</span>` : ''}</div>
-      </span></a>`).join('') : '<p class="vazio">Nenhuma missa ainda. Crie uma e escolha os cantos de cada parte.</p>'}`;
+      </span></a>`).join('') : '<p class="vazio">Nenhuma missa ainda. Crie uma e escolha os cantos de cada parte.</p>'}
+    <h2 style="margin-top:1.4em">Folhetos “O Dia do Senhor”</h2>
+    <p class="pequeno suave">Escolha os PDFs do folheto (os que você recebe como assinante). O app lê a data e os cantos e liga cada folheto à missa do fim de semana. O folheto fica só neste aparelho.</p>
+    <div class="barra"><button class="btn primario" id="sinc">⟳ Sincronizar folhetos</button><input type="file" id="arq-folheto" accept="application/pdf,.pdf" multiple hidden></div>
+    <p class="pequeno" id="sinc-status" aria-live="polite"></p>
+    <div id="lista-folhetos"></div>`;
   tela.querySelector('#nova').onclick = () => novaMissa();
+  const lista = tela.querySelector('#lista-folhetos'), status = tela.querySelector('#sinc-status'), arq = tela.querySelector('#arq-folheto');
+  const mostrar = async () => {
+    const fs = await listarFolhetos();
+    lista.innerHTML = fs.length ? fs.map(f => cartaoFolheto(f)).join('') : '<p class="vazio">Nenhum folheto no aparelho.</p>';
+    fs.forEach(f => ligarFolheto(lista, f, { aoRemover: mostrar }));
+  };
+  mostrar();
+  tela.querySelector('#sinc').onclick = () => arq.click();
+  arq.onchange = async () => {
+    const arquivos = [...arq.files]; arq.value = '';
+    if (!arquivos.length) return;
+    const botao = tela.querySelector('#sinc'); botao.disabled = true;
+    try {
+      const r = await sincronizarFolhetos(arquivos, msg => { status.textContent = msg; });
+      status.innerHTML = [r.novos.length ? `✓ ${r.novos.length} folheto(s) lido(s): ${r.novos.map(f => `${esc(f.titulo)} (${esc(dataCurta(f.data))}, ${f.cantos.length} cantos)`).join('; ')}` : '',
+        r.pulados.length ? `${r.pulados.length} já estava(m) no aparelho` : '', ...r.falhas.map(f => `<span style="color:var(--perigo, #b00020)">${esc(f)}</span>`)].filter(Boolean).join('<br>');
+    } finally { botao.disabled = false; }
+    mostrar();
+  };
 }
 
-export function novaMissa(aoCriar) {
+export function novaMissa(aoCriar, { data: dataInicial } = {}) {
   const hoje = new Date();
   const domingo = new Date(hoje); domingo.setDate(hoje.getDate() + ((7 - hoje.getDay()) % 7));
-  const iso = domingo.toISOString().slice(0, 10);
+  const iso = dataInicial || domingo.toISOString().slice(0, 10);
   const tx = estado.taxonomia;
   const { el, fechar } = modal(`<h2 style="margin-top:0">Nova missa</h2>
     <form id="nm">
@@ -228,15 +345,19 @@ export function novaMissa(aoCriar) {
     f.tempo.value = tempoPorData(d);
     f.ano.value = anoPorData(d);
   };
-  let reps = [], tituloMexido = false;
+  let reps = [], tituloMexido = false, folhetos = [];
+  listarFolhetos().then(l => { folhetos = l; mostrarRep(); });
+  const folhetoDoForm = () => folhetoDaData(folhetos, f.data.value);
   f.titulo.oninput = () => { tituloMexido = true; };
   const info = el.querySelector('#rep-info');
   const mostrarRep = () => {
     const r = reps.find(x => String(x.id) === f.rep.value);
     el.querySelector('#rot').hidden = !!r;
-    if (!r) { info.textContent = reps.length ? 'Sem repertório: a missa começa vazia ou só com as partes.' : ''; return; }
+    const fol = folhetoDoForm();
+    const txtFol = fol ? ` Folheto O Dia do Senhor (${fol.titulo}): os ${fol.cantos.length} cantos indicados vêm primeiro em cada parte.` : '';
+    if (!r) { info.textContent = (reps.length ? 'Sem repertório: a missa começa vazia ou só com as partes.' : '') + txtFol; return; }
     const { itens, fora } = itensDoRepertorio(r);
-    info.textContent = `${itens.length} cantos já entram na missa, na ordem proposta${fora ? ` (${fora} não estão no acervo)` : ''}. Depois é só trocar o que quiser.`;
+    info.textContent = `${itens.length} cantos já entram na missa, na ordem proposta${fora ? ` (${fora} não estão no acervo)` : ''}. Depois é só trocar o que quiser.` + txtFol;
     if (!tituloMexido) f.titulo.value = r.nome;
   };
   const escolherPelaData = () => {
@@ -264,6 +385,8 @@ export function novaMissa(aoCriar) {
     const missa = { id: novoId(), titulo: f.titulo.value.trim() || 'Missa', data: f.data.value, tempo: +f.tempo.value || null,
       ano: +f.ano.value || null, repertorio: rep ? rep.id : undefined,
       itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? ROTEIRO.map(([rotulo, parte]) => ({ rotulo, parte, chave: null, tom: null })) : [] };
+    const fol = folhetoDoForm();
+    if (fol) aplicarFolheto(missa.itens, fol);
     estado.missas.push(missa); estado.prefs.missaAtiva = missa.id; salvarPrefs(); foco.idx = null; salvar(); fechar();
     if (rep) aviso(`Missa montada com o repertório da Arquidiocese: ${rep.nome}`);
     if (aoCriar) aoCriar(missa); else if (rep) location.hash = '#/missa/' + missa.id; else if (location.hash === '#/musicas') window.dispatchEvent(new Event('missa-mudou')); else location.hash = '#/musicas';
@@ -294,8 +417,22 @@ export function telaMissa(tela, id, modo) {
       <button class="btn" id="duplicar">Duplicar</button>
       <button class="btn perigo" id="excluir">Excluir</button>
     </div>
+    <div id="folheto" class="nao-imprimir"></div>
     <div id="corpo"></div>`;
   const corpo = tela.querySelector('#corpo');
+  // folheto da data (guardado no aparelho): botão para ver dentro do app e selo nos cantos indicados nele
+  listarFolhetos().then(fs => {
+    const fol = folhetoDaData(fs, x.data);
+    const alvo = tela.querySelector('#folheto');
+    if (!fol || !alvo) return;
+    alvo.innerHTML = cartaoFolheto(fol, x);
+    ligarFolheto(alvo, fol, { aoPor: () => { const n = aplicarFolheto(x.itens, fol); salvar(); aviso(`${n} canto(s) do folheto na missa`); redesenhar(); } });
+    const nums = numerosDoFolheto(fol);
+    tela.querySelectorAll('.missa-slot[data-i]').forEach(s => {
+      const it = x.itens[+s.dataset.i];
+      if (ehDoFolheto(it?.chave && musica(it.chave), nums)) s.querySelector('.parte')?.insertAdjacentHTML('beforeend', ' <span class="selo folheto" title="Canto indicado no folheto O Dia do Senhor">folheto</span>');
+    });
+  });
 
   if (modo === 'montar') {
     corpo.innerHTML = x.itens.map((it, i) => {

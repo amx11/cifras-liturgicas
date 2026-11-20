@@ -9,14 +9,16 @@ export async function carregarPdfjs() {
 
 const urlDoApp = caminho => new URL('../' + caminho, import.meta.url).href;
 
+// caminho no app (cifra escaneada) ou um Blob (folheto guardado no aparelho)
 async function abrir(caminho) {
   const lib = await carregarPdfjs();
+  if (caminho instanceof Blob) return lib.getDocument({ data: new Uint8Array(await caminho.arrayBuffer()), isEvalSupported: false }).promise;
   return lib.getDocument({ url: urlDoApp(caminho), isEvalSupported: false }).promise;
 }
 
 // Desenha todas as páginas no elemento (largura do elemento, nitidez da tela)
-export async function desenharPDF(caminho, alvo) {
-  alvo.innerHTML = '<p class="pequeno suave">Carregando a cifra escaneada...</p>';
+export async function desenharPDF(caminho, alvo, oQue = 'a cifra escaneada') {
+  alvo.innerHTML = `<p class="pequeno suave">Carregando ${oQue}...</p>`;
   try {
     const doc = await abrir(caminho);
     alvo.innerHTML = '';
@@ -29,13 +31,13 @@ export async function desenharPDF(caminho, alvo) {
       const cv = document.createElement('canvas');
       cv.width = vp.width; cv.height = vp.height;
       cv.className = 'pagina-escaneada';
-      cv.setAttribute('aria-label', `Página ${p} da cifra escaneada`);
+      cv.setAttribute('aria-label', `Página ${p} de ${oQue}`);
       await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
       alvo.append(cv);
     }
     await doc.destroy();
   } catch (e) {
-    alvo.innerHTML = `<p class="vazio">Não foi possível abrir a cifra escaneada (${e.message}).</p>`;
+    alvo.innerHTML = `<p class="vazio">Não foi possível abrir ${oQue} (${e.message}).</p>`;
   }
 }
 

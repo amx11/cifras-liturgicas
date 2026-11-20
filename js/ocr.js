@@ -100,13 +100,13 @@ function limiarAdaptativo(ctx, w, h) {
 }
 
 // Páginas de um PDF (escaneado) -> canvas
-async function pdfParaCanvas(dados) {
+async function pdfParaCanvas(dados, largura = LARGURA) {
   const lib = await carregarPdfjs();
   const doc = await lib.getDocument({ data: dados, isEvalSupported: false }).promise;
   const out = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const pg = await doc.getPage(n);
-    const vp = pg.getViewport({ scale: LARGURA / pg.getViewport({ scale: 1 }).width });
+    const vp = pg.getViewport({ scale: largura / pg.getViewport({ scale: 1 }).width });
     const cv = document.createElement('canvas');
     cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
     const ctx = cv.getContext('2d');
@@ -116,6 +116,35 @@ async function pdfParaCanvas(dados) {
   }
   await doc.destroy();
   return out;
+}
+
+// Texto corrido de um PDF (folheto em colunas): usa o texto do PDF se tiver; escaneado, lê com o layout automático
+let leitorTexto = null;
+export async function lerTextoPdf(dados, progresso = () => {}) {
+  const lib = await carregarPdfjs();
+  const doc = await lib.getDocument({ data: dados.slice(0), isEvalSupported: false }).promise;
+  let texto = '';
+  for (let n = 1; n <= doc.numPages; n++) {
+    const tc = await (await doc.getPage(n)).getTextContent();
+    texto += tc.items.map(i => i.str + (i.hasEOL ? '\n' : ' ')).join('') + '\n';
+  }
+  await doc.destroy();
+  if (texto.replace(/\s/g, '').length > 800) return texto;
+  progresso('preparando o leitor (a primeira vez demora um pouco)...');
+  const paginas = await pdfParaCanvas(dados.slice(0), 1700);   // texto do folheto: basta ~200 dpi (mais rápido)
+  if (!leitorTexto) {
+    const T = await carregarTesseract();
+    leitorTexto = await T.createWorker('por', 1, { workerPath: BASE + 'worker.min.js', corePath: BASE + 'core/', langPath: BASE + 'lang', gzip: false, cacheMethod: 'none',
+      logger: m => { if (m.status === 'recognizing text') aoProgresso?.(m.progress); } });
+  }
+  texto = '';
+  try {
+    for (let i = 0; i < paginas.length; i++) {
+      aoProgresso = p => progresso(`lendo a página ${i + 1} de ${paginas.length}... ${Math.round(p * 100)}%`);
+      texto += (await leitorTexto.recognize(paginas[i])).data.text + '\n';
+    }
+  } finally { aoProgresso = null; }
+  return texto;
 }
 
 export const ehImagem = arq => arq.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|bmp|gif)$/i.test(arq.name);
