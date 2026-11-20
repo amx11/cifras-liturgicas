@@ -4,7 +4,7 @@ import { esc, aviso, modal, confirmar, irPara, ORDEM_TEMPOS, COR_TEMPO, nomeTemp
 import { painelCifra, telaEditar } from './app.js';
 import { chordproNoTom } from './cifra.js';
 import { exportarMissa } from './exportar.js';
-import { listarFolhetos, folhetoDaData, pdfDoFolheto, sincronizarFolhetos, removerFolheto, folhetosCompartilhados } from './folheto.js';
+import { listarFolhetos, folhetoDaData, arquivosDoFolheto, sincronizarFolhetos, removerFolheto, folhetosCompartilhados, QR_ARQUIDIOCESE } from './folheto.js';
 import { desenharPDF } from './visualizar-pdf.js';
 
 // Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
@@ -271,8 +271,10 @@ function ligarFolheto(raiz, fol, { aoPor, aoRemover } = {}) {
       b.textContent = pags.hidden ? 'Folheto ▾' : 'Fechar folheto ▴';
       if (!pags.hidden && !pags.dataset.ok) {
         pags.dataset.ok = '1';
-        const pdf = await pdfDoFolheto(fol.data);
-        if (pdf) desenharPDF(pdf, pags, 'o folheto'); else pags.innerHTML = '<p class="vazio">O PDF deste folheto não está mais no aparelho. Sincronize de novo.</p>';
+        const { pdf, paginas } = await arquivosDoFolheto(fol.data);
+        if (pdf) desenharPDF(pdf, pags, 'o folheto');
+        else if (paginas.length) pags.innerHTML = paginas.map((b, i) => `<img src="${URL.createObjectURL(b)}" alt="Página ${i + 1} do folheto (foto)">`).join('');
+        else pags.innerHTML = '<p class="vazio">O arquivo deste folheto não está mais no aparelho. Sincronize de novo.</p>';
       }
     }
     if (acao === 'por') aoPor?.();
@@ -299,6 +301,24 @@ function repertorioDosProximosDias(reps, iso) {
   }
   return melhor;
 }
+// missa de uma data (QR code / foto do folheto): a que já existe, ou montada com o repertório e o folheto da data
+export async function missaDaData(data) {
+  const fs = await listarFolhetos();
+  const fol = folhetoDaData(fs, data);
+  let x = estado.missas.find(y => y.data === data) || (fol && estado.missas.find(y => y.data === fol.data));
+  if (x) { if (fol) aplicarFolheto(x.itens, fol); salvar(); return x; }
+  const reps = await carregarRepertorios();
+  const r = repertorioDaData(reps, data);
+  const d = new Date(data + 'T12:00');
+  x = { id: novoId(), titulo: r?.nome || fol?.titulo || 'Missa', data: r?.data || data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r?.id,
+    itens: r ? itensDoRepertorio(r).itens : ROTEIRO.map(([rotulo, parte]) => ({ rotulo, parte, chave: null, tom: null })) };
+  if (fol) aplicarFolheto(x.itens, fol);
+  estado.missas.push(x);
+  if (r) estado.prefs.missasAutomaticas = [...(estado.prefs.missasAutomaticas || []), r.id].slice(-60);
+  estado.prefs.missaAtiva = x.id; foco.idx = null; salvarPrefs(); salvar();
+  return x;
+}
+
 export async function missaAutomatica() {
   const reps = await carregarRepertorios();
   const r = repertorioDosProximosDias(reps, hojeIso());
@@ -333,8 +353,9 @@ export function telaMissas(tela) {
         <div class="selos">${x.tempo ? `<span class="selo tempo" style="--cor:${COR_TEMPO[x.tempo]}">${esc(nomeTempo(x.tempo))}</span>` : ''}${x.ano ? `<span class="selo">${esc(estado.taxonomia.anos[x.ano] || '')}</span>` : ''}</div>
       </span></a>`).join('') : '<p class="vazio">Nenhuma missa ainda. Crie uma e escolha os cantos de cada parte.</p>'}
     <h2 style="margin-top:1.4em">Folhetos “O Dia do Senhor”</h2>
-    <p class="pequeno suave">No celular: no WhatsApp, toque no PDF do folheto → Compartilhar → <b>Cifras Litúrgicas</b>. Ou toque em Sincronizar e escolha os PDFs. O app lê a data e os cantos e liga cada folheto à missa do fim de semana. O folheto fica só neste aparelho.</p>
-    <div class="barra"><button class="btn primario" id="sinc">⟳ Sincronizar folhetos</button><input type="file" id="arq-folheto" accept="application/pdf,.pdf" multiple hidden></div>
+    <p class="pequeno suave">Duas formas: <b>pôr o arquivo</b> (o PDF que chega no WhatsApp — ou no WhatsApp: Compartilhar → <b>Cifras Litúrgicas</b>) ou <b>ler o QR code</b> do folheto de papel com a câmera (fotografe a 1ª página inteira; pode fotografar as outras também). O app lê a data e os cantos e abre a missa daquele dia com o repertório da Arquidiocese. O folheto fica só neste aparelho.</p>
+    <div class="barra"><button class="btn primario" id="sinc">📄 Pôr o arquivo (PDF)</button><button class="btn primario" id="qr">📷 Ler QR code do folheto</button>
+      <input type="file" id="arq-folheto" accept="application/pdf,.pdf" multiple hidden><input type="file" id="foto-folheto" accept="image/*" capture="environment" multiple hidden></div>
     <p class="pequeno" id="sinc-status" aria-live="polite"></p>
     <div id="lista-folhetos"></div>`;
   tela.querySelector('#nova').onclick = () => novaMissa();
@@ -346,18 +367,35 @@ export function telaMissas(tela) {
   };
   mostrar();
   tela.querySelector('#sinc').onclick = () => arq.click();
+  const reps = carregarRepertorios();
   const sincronizar = async arquivos => {
     if (!arquivos.length) return;
-    const botao = tela.querySelector('#sinc'); botao.disabled = true;
+    const botoes = tela.querySelectorAll('#sinc, #qr'); botoes.forEach(b => { b.disabled = true; });
+    const botao = { set disabled(v) { botoes.forEach(b => { b.disabled = v; }); } };
     tela.querySelector('#sinc').scrollIntoView({ block: 'center' });
+    const lista = await reps;
     try {
-      const r = await sincronizarFolhetos(arquivos, msg => { status.textContent = msg; });
+      const r = await sincronizarFolhetos(arquivos, msg => { status.textContent = msg; }, {
+        tituloDaData: d => repertorioDaData(lista, d)?.nome,
+        perguntarData: async nome => { const v = prompt(`Não consegui ler a data${nome ? ` de “${nome}”` : ' na foto'}. Qual a data da missa? (dd/mm/aaaa)`); const m = v?.match(/(\d{1,2})\D(\d{1,2})\D(\d{4})/); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null; },
+      });
+      if (r.qrs.length) status.dataset.qr = r.qrs.some(q => QR_ARQUIDIOCESE.test(q)) ? 'ok' : 'outro';
+      // um folheto lido: já abre a missa daquele dia
+      if (r.novos.length === 1 && !r.falhas.length) {
+        const x = await missaDaData(r.novos[0].data);
+        aviso(`${r.qrs.some(q => QR_ARQUIDIOCESE.test(q)) ? 'QR code da Arquidiocese lido. ' : ''}Folheto de ${dataCurta(r.novos[0].data)}: missa “${x.titulo}” pronta`, 4500);
+        location.hash = '#/missa/' + x.id;
+        return;
+      }
       status.innerHTML = [r.novos.length ? `✓ ${r.novos.length} folheto(s) lido(s): ${r.novos.map(f => `${esc(f.titulo)} (${esc(dataCurta(f.data))}, ${f.cantos.length} cantos)`).join('; ')}` : '',
         r.pulados.length ? `${r.pulados.length} já estava(m) no aparelho` : '', ...r.falhas.map(f => `<span style="color:var(--perigo, #b00020)">${esc(f)}</span>`)].filter(Boolean).join('<br>');
     } finally { botao.disabled = false; }
     mostrar();
   };
   arq.onchange = () => { const arquivos = [...arq.files]; arq.value = ''; sincronizar(arquivos); };
+  const foto = tela.querySelector('#foto-folheto');
+  tela.querySelector('#qr').onclick = () => foto.click();
+  foto.onchange = () => { const arquivos = [...foto.files]; foto.value = ''; sincronizar(arquivos); };
   // chegou pelo "Compartilhar" (WhatsApp → Cifras Litúrgicas): já lê
   folhetosCompartilhados().then(sincronizar);
 }

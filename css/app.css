@@ -308,5 +308,5 @@ h1 .num { min-width: 0; margin-right: .2em; }
 .folheto-canto { display: inline-block; margin: .15em .9em .15em 0; }
 .folheto-canto.falta { color: var(--suave); }
 .folheto-paginas { margin-top: .6em; }
-.folheto-paginas canvas { width: 100%; height: auto; display: block; margin-bottom: .5em; border: 1px solid var(--linha); }
+.folheto-paginas canvas, .folheto-paginas img { width: 100%; height: auto; display: block; margin-bottom: .5em; border: 1px solid var(--linha); }
 .selo.folheto { background: #2e6b4f; color: #fff; border: 0; }

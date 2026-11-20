@@ -86,9 +86,26 @@ export async function listarFolhetos() {
   } catch { cache = []; }
   return cache;
 }
-export async function pdfDoFolheto(data) {
+// o que dá para mostrar do folheto: o PDF, ou as fotos das páginas
+export async function arquivosDoFolheto(data) {
   const f = await naLoja('readonly', s => s.get(data));
-  return f?.arquivo || null;
+  return { pdf: f?.arquivo || null, paginas: f?.paginas || [] };
+}
+const ehFoto = a => /^image\//.test(a.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(a.name);
+export const QR_ARQUIDIOCESE = /arquipoa\.com/i;
+// guarda; se já houver folheto da mesma data, junta os cantos e mantém o PDF (foto não substitui PDF)
+async function guardar(f) {
+  const velho = await naLoja('readonly', s => s.get(f.data));
+  if (velho) {
+    const cantos = [...velho.cantos];
+    for (const c of f.cantos) if (!cantos.some(x => x.num === c.num)) cantos.push(c);
+    f = { ...velho, ...f, cantos, arquivo: f.arquivo || velho.arquivo, paginas: f.arquivo ? undefined : (f.paginas?.length ? f.paginas : velho.paginas),
+      nome: f.arquivo ? f.nome : velho.nome, titulo: velho.arquivo && !f.arquivo ? velho.titulo : f.titulo };
+  }
+  await naLoja('readwrite', s => s.put(f));
+  cache = null;
+  const { arquivo, paginas, ...resumo } = f;
+  return resumo;
 }
 export async function removerFolheto(data) {
   await naLoja('readwrite', s => s.delete(data));
@@ -111,12 +128,29 @@ export async function folhetosCompartilhados() {
 }
 
 // ---------- Sincronizar: lê os PDFs escolhidos e guarda os novos ----------
-// arquivos: File[] (PDFs do folheto). Já guardado com o mesmo nome e tamanho = pula.
-export async function sincronizarFolhetos(arquivos, progresso = () => {}) {
+// arquivos: File[] — PDFs do folheto (cada um é um folheto) e/ou fotos do folheto de papel (todas juntas = um
+// folheto; a data vem do cabeçalho impresso e o QR code confirma que é o folheto da Arquidiocese).
+// opcoes.tituloDaData(data) dá o nome (do repertório da Arquidiocese); opcoes.perguntarData() quando a foto não mostra a data.
+// Já guardado com o mesmo nome e tamanho = pula.
+export async function sincronizarFolhetos(arquivos, progresso = () => {}, opcoes = {}) {
   const ja = await listarFolhetos();
-  const novos = [], pulados = [], falhas = [];
-  const { lerTextoPdf } = await import('./ocr.js');
+  const novos = [], pulados = [], falhas = [], qrs = [];
+  const { lerTextoPdf, lerTextoImagens, lerQrCodes } = await import('./ocr.js');
+  const fotos = arquivos.filter(ehFoto);
+  if (fotos.length) {
+    try {
+      progresso('Procurando o QR code...');
+      qrs.push(...await lerQrCodes(fotos));
+      const texto = await lerTextoImagens(fotos, msg => progresso('Foto do folheto: ' + msg));
+      const data = dataDoFolheto('', texto) || await opcoes.perguntarData?.();
+      if (!data) falhas.push('Foto do folheto: não consegui ler a data (fotografe a 1ª página inteira, com o cabeçalho)');
+      else novos.push(await guardar({ data, nome: `foto-${data}`, tamanho: fotos.reduce((n, a) => n + a.size, 0),
+        titulo: opcoes.tituloDaData?.(data) || 'Folheto (foto)', cantos: cantosDoFolheto(texto), lido: new Date().toISOString(),
+        paginas: fotos.map(a => new Blob([a], { type: a.type || 'image/jpeg' })), qr: qrs[0] }));
+    } catch (e) { falhas.push(`Foto do folheto: ${e.message}`); }
+  }
   let k = 0;
+  arquivos = arquivos.filter(a => !ehFoto(a));
   for (const arq of arquivos) {
     k++;
     const rot = arquivos.length > 1 ? `Folheto ${k} de ${arquivos.length} (${arq.name}): ` : `${arq.name}: `;
@@ -125,15 +159,12 @@ export async function sincronizarFolhetos(arquivos, progresso = () => {}) {
     try {
       const dados = new Uint8Array(await arq.arrayBuffer());
       const texto = await lerTextoPdf(dados, msg => progresso(rot + msg));
-      const data = dataDoFolheto(arq.name, texto);
+      const data = dataDoFolheto(arq.name, texto) || await opcoes.perguntarData?.(arq.name);
       if (!data) { falhas.push(`${arq.name}: não achei a data (ponha a data no nome do arquivo, ex.: 2026-11-22-Cristo Rei.pdf)`); continue; }
-      const f = { data, nome: arq.name, tamanho: arq.size, titulo: tituloDoFolheto(arq.name), cantos: cantosDoFolheto(texto),
-        lido: new Date().toISOString(), arquivo: new Blob([dados], { type: 'application/pdf' }) };
-      await naLoja('readwrite', s => s.put(f));
-      cache = null;
-      const { arquivo, ...resumo } = f;
-      novos.push(resumo);
+      const titulo = tituloDoFolheto(arq.name);
+      novos.push(await guardar({ data, nome: arq.name, tamanho: arq.size, titulo: titulo === 'Folheto' ? (opcoes.tituloDaData?.(data) || titulo) : titulo,
+        cantos: cantosDoFolheto(texto), lido: new Date().toISOString(), arquivo: new Blob([dados], { type: 'application/pdf' }) }));
     } catch (e) { falhas.push(`${arq.name}: ${e.message}`); }
   }
-  return { novos, pulados, falhas };
+  return { novos, pulados, falhas, qrs };
 }
