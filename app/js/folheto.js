@@ -4,6 +4,8 @@
 // indicados ("CANTO: ACC (H.L.) nº 413"), que têm o mesmo número das cifras da Arquidiocese. O QR code do folheto
 // leva a arquipoa.com/musica-liturgica, de onde já vêm os repertórios do fim de semana.
 
+import { oracaoDoTexto } from './oracoes.js';
+
 const BANCO = 'cl-folhetos', LOJA = 'folhetos';
 
 // ---------- Leitura (funções puras: também rodam no Node, para testar) ----------
@@ -99,7 +101,7 @@ async function guardar(f) {
   if (velho) {
     const cantos = [...velho.cantos];
     for (const c of f.cantos) if (!cantos.some(x => x.num === c.num)) cantos.push(c);
-    f = { ...velho, ...f, cantos, arquivo: f.arquivo || velho.arquivo, paginas: f.arquivo ? undefined : (f.paginas?.length ? f.paginas : velho.paginas),
+    f = { ...velho, ...f, cantos, oe: f.oe || velho.oe, arquivo: f.arquivo || velho.arquivo, paginas: f.arquivo ? undefined : (f.paginas?.length ? f.paginas : velho.paginas),
       nome: f.arquivo ? f.nome : velho.nome, titulo: velho.arquivo && !f.arquivo ? velho.titulo : f.titulo };
   }
   await naLoja('readwrite', s => s.put(f));
@@ -145,7 +147,7 @@ export async function sincronizarFolhetos(arquivos, progresso = () => {}, opcoes
       const data = dataDoFolheto('', texto) || await opcoes.perguntarData?.();
       if (!data) falhas.push('Foto do folheto: não consegui ler a data (fotografe a 1ª página inteira, com o cabeçalho)');
       else novos.push(await guardar({ data, nome: `foto-${data}`, tamanho: fotos.reduce((n, a) => n + a.size, 0),
-        titulo: opcoes.tituloDaData?.(data) || 'Folheto (foto)', cantos: cantosDoFolheto(texto), lido: new Date().toISOString(),
+        titulo: opcoes.tituloDaData?.(data) || 'Folheto (foto)', cantos: cantosDoFolheto(texto), oe: oracaoDoTexto(texto), lido: new Date().toISOString(),
         paginas: fotos.map(a => new Blob([a], { type: a.type || 'image/jpeg' })), qr: qrs[0] }));
     } catch (e) { falhas.push(`Foto do folheto: ${e.message}`); }
   }
@@ -163,7 +165,7 @@ export async function sincronizarFolhetos(arquivos, progresso = () => {}, opcoes
       if (!data) { falhas.push(`${arq.name}: não achei a data (ponha a data no nome do arquivo, ex.: 2026-11-22-Cristo Rei.pdf)`); continue; }
       const titulo = tituloDoFolheto(arq.name);
       novos.push(await guardar({ data, nome: arq.name, tamanho: arq.size, titulo: titulo === 'Folheto' ? (opcoes.tituloDaData?.(data) || titulo) : titulo,
-        cantos: cantosDoFolheto(texto), lido: new Date().toISOString(), arquivo: new Blob([dados], { type: 'application/pdf' }) }));
+        cantos: cantosDoFolheto(texto), oe: oracaoDoTexto(texto), lido: new Date().toISOString(), arquivo: new Blob([dados], { type: 'application/pdf' }) }));
     } catch (e) { falhas.push(`${arq.name}: ${e.message}`); }
   }
   return { novos, pulados, falhas, qrs };

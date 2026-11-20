@@ -5,7 +5,7 @@
 //    menos Advento e Quaresma (não se canta o Glória nesses tempos, salvo solenidades);
 // 4) Aleluia nunca na Quaresma.
 // Tempos: 1 Advento, 2 Quaresma, 3 Pascal, 4 Natal, 5 Comum, 6 Semana Santa, 7 Solenidades.
-// Partes: 1 Glória, 2 Santo, 3 Aclamação, 4 Entrada, 5 Ato penitencial, 6 Salmo, 10 Oferendas, 15 Cordeiro, 16 Comunhão, 18 Outros, 20 Prece Eucarística, 90 Canto a Maria.
+// Partes: 1 Glória, 2 Santo, 3 Aclamação, 4 Entrada, 5 Ato penitencial, 6 Salmo, 10 Oferendas, 15 Cordeiro, 16 Comunhão, 18 Outros, 20 Oração Eucarística, 90 Canto a Maria.
 
 const TODOS = [1, 4, 5, 2, 6, 3, 7];
 const SEM_GLORIA = [1, 2];
@@ -53,7 +53,7 @@ export function revisarClassificacao(grupos) {
   }
   for (const vs of grupos) for (const m of vs) {
     const titulo = n(m.nome);
-    // Prece Eucarística: aclamação memorial ("Anunciamos, Senhor…", "Todas as vezes…", "Salvador do mundo…"),
+    // Oração Eucarística: aclamação memorial ("Anunciamos, Senhor…", "Todas as vezes…", "Salvador do mundo…"),
     // doxologia ("Por Cristo, com Cristo…") e Amém — parte própria, depois do Santo
     if (PRECE.test(titulo) || (/^(amem|mist[eé]rio da f[eé])$/.test(titulo) && PRECE_LETRA.test(n(m.chordpro).replace(/\[[^\]]*\]/g, '')))) {
       m.partes = [20];
