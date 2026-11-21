@@ -1,0 +1,57 @@
+rules_version = '2';
+// Regras do Firestore do app Cifras Litúrgicas (cole no Console do Firebase → Firestore Database → Regras → Publicar).
+// - cada pessoa só lê/escreve o próprio documento em /usuarios
+// - só quem é MEMBRO de um grupo lê o grupo (missas, cifras, nomes editados)
+// - só o COORDENADOR muda o grupo; quem entra com o código de convite fica como MÚSICO
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function logado() { return request.auth != null; }
+    function caminhoMembro(g) { return /databases/$(database)/documents/grupos/$(g)/membros/$(request.auth.uid); }
+    function membro(g) { return logado() && exists(caminhoMembro(g)); }
+    function coordenador(g) { return membro(g) && get(caminhoMembro(g)).data.papel == 'coordenador'; }
+
+    match /usuarios/{uid} {
+      allow read, write: if logado() && request.auth.uid == uid;
+    }
+
+    // código de convite -> grupo (qualquer pessoa logada pode consultar um código que já tem)
+    match /convites/{codigo} {
+      allow get: if logado();
+      allow create: if logado() && request.resource.data.criadoPor == request.auth.uid
+                    && get(/databases/$(database)/documents/grupos/$(request.resource.data.grupo)).data.criadoPor == request.auth.uid;
+      allow delete: if logado() && coordenador(resource.data.grupo);
+    }
+
+    match /grupos/{g} {
+      allow read: if membro(g);
+      allow create: if logado() && request.resource.data.criadoPor == request.auth.uid;
+      allow update: if coordenador(g);
+
+      match /membros/{uid} {
+        allow read: if membro(g);
+        // entrar: o criador do grupo como coordenador; os outros como músico, com um código de convite deste grupo
+        allow create: if logado() && request.auth.uid == uid && (
+          (request.resource.data.papel == 'coordenador'
+            && get(/databases/$(database)/documents/grupos/$(g)).data.criadoPor == request.auth.uid)
+          || (request.resource.data.papel == 'musico'
+            && get(/databases/$(database)/documents/convites/$(request.resource.data.convite)).data.grupo == g));
+        // mudar papel / remover: coordenador; sair do grupo: a própria pessoa
+        allow update: if coordenador(g);
+        allow delete: if coordenador(g) || (logado() && request.auth.uid == uid);
+      }
+
+      match /missas/{id} {
+        allow read: if membro(g);
+        allow write: if coordenador(g);
+      }
+      match /musicas/{id} {
+        allow read: if membro(g);
+        allow write: if coordenador(g);
+      }
+      match /edicoes/{id} {
+        allow read: if membro(g);
+        allow write: if coordenador(g);
+      }
+    }
+  }
+}

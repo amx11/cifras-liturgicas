@@ -7,6 +7,9 @@ import { exportarMissa } from './exportar.js';
 import { listarFolhetos, folhetoDaData, arquivosDoFolheto, sincronizarFolhetos, removerFolheto, folhetosCompartilhados, QR_ARQUIDIOCESE } from './folheto.js';
 import { desenharPDF } from './visualizar-pdf.js';
 import { ORACOES, nomeOracao, urlOracao } from './oracoes.js';
+import { conta, coordenador } from './nuvem.js';
+// missa nova é do grupo quando quem cria é o coordenador
+const doGrupo = () => (coordenador() ? { grupo: conta.grupo } : {});
 
 // Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
 const ROTEIRO = [
@@ -324,7 +327,7 @@ export async function missaDaData(data) {
   const reps = await carregarRepertorios();
   const r = repertorioDaData(reps, data);
   const d = new Date(data + 'T12:00');
-  x = { id: novoId(), titulo: r?.nome || fol?.titulo || 'Missa', data: r?.data || data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r?.id,
+  x = { id: novoId(), ...doGrupo(), titulo: r?.nome || fol?.titulo || 'Missa', data: r?.data || data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r?.id,
     itens: r ? itensDoRepertorio(r).itens : ROTEIRO.map(([rotulo, parte, tipo]) => ({ rotulo, parte, chave: null, tom: null, ...(tipo ? { tipo } : {}) })) };
   if (fol) aplicarFolheto(x.itens, fol);
   estado.missas.push(x);
@@ -337,11 +340,12 @@ export async function missaAutomatica() {
   const reps = await carregarRepertorios();
   const r = repertorioDosProximosDias(reps, hojeIso());
   if (!r) return null;
+  if (conta.grupo && !coordenador()) return null;      // no grupo, quem monta a missa automática é o coordenador
   const feitas = estado.prefs.missasAutomaticas || [];
-  const ja = estado.missas.find(y => y.repertorio === r.id || y.data === r.data);
+  const ja = estado.missas.find(y => y.id === 'auto-' + r.id || y.repertorio === r.id || y.data === r.data);
   if (ja || feitas.includes(r.id)) return ja || null;
   const d = new Date(r.data + 'T12:00');
-  const missa = { id: novoId(), titulo: r.nome, data: r.data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r.id, automatica: true,
+  const missa = { id: conta.grupo ? 'auto-' + r.id : novoId(), ...doGrupo(), titulo: r.nome, data: r.data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r.id, automatica: true,
     itens: itensDoRepertorio(r).itens };
   const fol = folhetoDaData(await listarFolhetos(), r.data);
   if (fol) aplicarFolheto(missa.itens, fol);
@@ -362,7 +366,7 @@ export function telaMissas(tela) {
     <div class="barra" style="justify-content:space-between"><h1 style="margin:0">Missas</h1>
       <button class="btn primario" id="nova">✚ Nova missa</button></div>
     ${missas.length ? missas.map(x => `<a class="item" href="#/missa/${x.id}">
-      <span class="info"><span class="nome">${esc(x.titulo)}${x.automatica ? ' <span class="selo folheto" title="Montada sozinha pela data, com o repertório da Arquidiocese">automática</span>' : ''}</span>
+      <span class="info"><span class="nome">${esc(x.titulo)}${x.automatica ? ' <span class="selo folheto" title="Montada sozinha pela data, com o repertório da Arquidiocese">automática</span>' : ''}${x.grupo ? ` <span class="selo" title="Missa do grupo ${esc(conta.grupoNome)}">☁ grupo</span>` : ''}</span>
         <div class="comp">${x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : ''} · ${x.itens.filter(i => i.chave).length} cantos</div>
         <div class="selos">${x.tempo ? `<span class="selo tempo" style="--cor:${COR_TEMPO[x.tempo]}">${esc(nomeTempo(x.tempo))}</span>` : ''}${x.ano ? `<span class="selo">${esc(estado.taxonomia.anos[x.ano] || '')}</span>` : ''}</div>
       </span></a>`).join('') : '<p class="vazio">Nenhuma missa ainda. Crie uma e escolha os cantos de cada parte.</p>'}
@@ -474,7 +478,7 @@ export function novaMissa(aoCriar, { data: dataInicial } = {}) {
   f.onsubmit = e => {
     e.preventDefault();
     const rep = reps.find(x => String(x.id) === f.rep.value);
-    const missa = { id: novoId(), titulo: f.titulo.value.trim() || 'Missa', data: f.data.value, tempo: +f.tempo.value || null,
+    const missa = { id: novoId(), ...doGrupo(), titulo: f.titulo.value.trim() || 'Missa', data: f.data.value, tempo: +f.tempo.value || null,
       ano: +f.ano.value || null, repertorio: rep ? rep.id : undefined,
       itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? ROTEIRO.map(([rotulo, parte, tipo]) => ({ rotulo, parte, chave: null, tom: null, ...(tipo ? { tipo } : {}) })) : [] };
     const fol = folhetoDoForm();
@@ -491,6 +495,9 @@ export function telaMissa(tela, id, modo) {
   if (!x) { tela.innerHTML = '<p class="vazio">Missa não encontrada.</p>'; return; }
   if (estado.prefs.missaAtiva !== id) definirAtiva(id);
   modo ||= sessionStorage.getItem('cl.modoMissa') === 'ler' ? 'ler' : 'montar';
+  // missa do grupo: só o coordenador monta e edita; o músico vê, toca, apresenta e pode duplicar (cópia sua)
+  const soLer = !!x.grupo && !coordenador();
+  if (soLer) modo = 'ler';
   const redesenhar = (novoModo = modo) => { const y = window.scrollY; telaMissa(tela, id, novoModo); window.scrollTo(0, y); };
   const tx = estado.taxonomia;
 
@@ -498,17 +505,19 @@ export function telaMissa(tela, id, modo) {
     <div class="nao-imprimir"><a href="#/missas" class="pequeno">‹ Missas</a></div>
     <h1>${esc(x.titulo)}</h1>
     <div class="pequeno suave">${x.data ? new Date(x.data + 'T12:00').toLocaleDateString('pt-BR', { dateStyle: 'full' }) : ''}${x.tempo ? ' · ' + esc(nomeTempo(x.tempo)) : ''}${x.ano ? ' · ' + esc(tx.anos[x.ano] || '') : ''}</div>
+    ${x.grupo ? `<p class="pequeno nao-imprimir" style="margin:.3em 0">☁ Missa do grupo <b>${esc(conta.grupoNome || '')}</b>${soLer ? ' — só o coordenador muda. Para mexer, use Duplicar (fica uma cópia sua).' : ' — o que você mudar aparece para todos.'}</p>` : ''}
     <div class="barra nao-imprimir">
-      <button class="btn ${modo === 'montar' ? 'primario' : ''}" data-modo="montar">Montar</button>
+      ${soLer ? '' : `<button class="btn ${modo === 'montar' ? 'primario' : ''}" data-modo="montar">Montar</button>`}
       <button class="btn ${modo === 'ler' ? 'primario' : ''}" data-modo="ler">Ver cifras</button>
       <a class="btn primario" href="#/tocar/${x.id}/0" style="background:var(--acorde);border-color:var(--acorde)">▶ Tocar</a>
       <button class="btn primario" id="pdf">⬇ Exportar PDF</button>
       <button class="btn primario" id="apresentacao" title="Só a letra, para o telão: apresentar, PowerPoint ou PDF">📽 Apresentação</button>
       <button class="btn" id="imprimir">Imprimir</button>
       <button class="btn" id="compartilhar">Compartilhar lista</button>
-      <button class="btn" id="dados">Editar dados</button>
+      ${soLer ? '' : '<button class="btn" id="dados">Editar dados</button>'}
       <button class="btn" id="duplicar">Duplicar</button>
-      <button class="btn perigo" id="excluir">Excluir</button>
+      ${!x.grupo && coordenador() ? '<button class="btn primario" id="enviar-grupo" title="A missa passa a ser do grupo: todos veem">☁ Enviar para o grupo</button>' : ''}
+      ${soLer ? '' : '<button class="btn perigo" id="excluir">Excluir</button>'}
     </div>
     <div id="folheto" class="nao-imprimir"></div>
     <div id="corpo"></div>`;
@@ -662,7 +671,8 @@ export function telaMissa(tela, id, modo) {
       else { await navigator.clipboard.writeText(texto); aviso('Lista copiada'); }
     } catch { /* cancelado */ }
   };
-  tela.querySelector('#dados').onclick = () => {
+  tela.querySelector('#enviar-grupo')?.addEventListener('click', () => { x.grupo = conta.grupo; salvar(); aviso('Missa enviada para o grupo'); redesenhar(); });
+  if (tela.querySelector('#dados')) tela.querySelector('#dados').onclick = () => {
     const { el, fechar } = modal(`<h2 style="margin-top:0">Dados da missa</h2>
       <label class="campo"><span>Nome</span><input type="text" id="t" value="${esc(x.titulo)}"></label>
       <label class="campo"><span>Data</span><input type="date" id="d" value="${esc(x.data || '')}"></label>
@@ -682,9 +692,10 @@ export function telaMissa(tela, id, modo) {
   };
   tela.querySelector('#duplicar').onclick = () => {
     const copia = { ...structuredClone(x), id: novoId(), titulo: x.titulo + ' (cópia)' };
+    delete copia.grupo; Object.assign(copia, doGrupo());     // músico: a cópia é sua; coordenador: do grupo
     estado.missas.push(copia); salvar(); aviso('Missa duplicada'); location.hash = '#/missa/' + copia.id;
   };
-  tela.querySelector('#excluir').onclick = async () => {
+  if (tela.querySelector('#excluir')) tela.querySelector('#excluir').onclick = async () => {
     if (!(await confirmar(`Excluir a missa “${x.titulo}”?`, 'Excluir'))) return;
     estado.missas = estado.missas.filter(y => y.id !== id); if (estado.prefs.missaAtiva === id) { estado.prefs.missaAtiva = null; salvarPrefs(); } salvar(); location.hash = '#/missas';
   };

@@ -33,7 +33,12 @@ for (const x of estado.missas) for (const it of x.itens || []) if (/^prece eucar
 
 export function salvarPrefs() { gravar(CHAVES.prefs, estado.prefs); }
 export function salvarTons() { gravar(CHAVES.tons, estado.tons); }
-export function salvarMissas() { return gravar(CHAVES.missas, estado.missas); }
+// ganchos da conta/grupo (nuvem.js): aoSalvar avisa o que mudou; grupoNovo diz se o que for criado agora é do grupo
+export const ganchos = { aoSalvar: null, grupoNovo: null };
+export function salvarMissas() { const ok = gravar(CHAVES.missas, estado.missas); ganchos.aoSalvar?.('missas'); return ok; }
+// grava no aparelho o que veio do grupo (sem mandar de volta para a nuvem)
+export function guardarNoAparelho() { gravar(CHAVES.missas, estado.missas); gravar(CHAVES.minhas, estado.minhas); }
+export function recarregarIndice() { montarIndice(); }
 
 export async function carregarAcervo() {
   let dados = { musicas: [] };
@@ -169,8 +174,9 @@ function montarIndice() {
   for (const m of todas) {
     // ordem e número vêm do nome do acervo: renomear no aparelho não muda o número de nenhuma música
     m.nomeAcervo = m.nome;
-    const ed = estado.edicoes[m.chave];
-    if (ed) Object.assign(m, ed, { editada: true });
+    const edG = estado.edicoesGrupo?.[m.chave], ed = estado.edicoes[m.chave];
+    if (edG) Object.assign(m, edG, { editada: true });            // nome editado pelo coordenador do grupo
+    if (ed) Object.assign(m, ed, { editada: true });              // e o que eu editei neste aparelho
     if (m.chordpro && !m.tom) m.tom = detectarTom(m.chordpro);
     m.buscaTitulo = normalizar(`${m.numero ?? ''} ${m.nome} ${m.complemento || ''}`);
     m.buscaLetra = normalizar(m.chordpro || '');
@@ -362,11 +368,13 @@ export function salvarMinha(m) {
     base: m.base || null, personalizada: !!m.personalizada, audio: m.audio || null,
     audios: m.audios || null, audioQuebrado: !!m.audioQuebrado, youtubeInicio: m.youtubeInicio || null,
     ocr: m.ocr || null,
+    grupo: m.grupo ?? estado.minhas.find(x => x.chave === m.chave)?.grupo ?? (m.chave ? null : ganchos.grupoNovo?.() || null),
   };
   const i = estado.minhas.findIndex(x => x.chave === chave);
   if (i >= 0) estado.minhas[i] = registro; else estado.minhas.push(registro);
   const ok = gravar(CHAVES.minhas, estado.minhas);
   montarIndice();
+  ganchos.aoSalvar?.('musica', registro);
   return ok ? chave : null;
 }
 
@@ -391,12 +399,14 @@ export function editarMusica(chave, campos) {
   const original = estado.base.find(x => x.chave === chave);
   if (original) delete original.tom;
   montarIndice();
+  ganchos.aoSalvar?.('edicao', chave);
   return ok;
 }
 
 export function desfazerEdicao(chave) {
   delete estado.edicoes[chave];
   gravar(CHAVES.edicoes, estado.edicoes);
+  ganchos.aoSalvar?.('desfazerEdicao', chave);
   return carregarAcervo();
 }
 
@@ -404,6 +414,7 @@ export function excluirMinha(chave) {
   estado.minhas = estado.minhas.filter(m => m.chave !== chave);
   gravar(CHAVES.minhas, estado.minhas);
   montarIndice();
+  ganchos.aoSalvar?.('excluirMusica', chave);
 }
 
 // Busca: todas as palavras precisam aparecer no título ou na letra; título vem primeiro
