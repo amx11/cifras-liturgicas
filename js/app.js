@@ -14,6 +14,7 @@ import { telaOuvir, pararOuvir } from './ouvir.js';
 import { telaAfinador, pararAfinador } from './afinador.js';
 import { telaSumario } from './sumario.js';
 import { INSTRUMENTOS, NIVEIS, cartaoAcorde, prepararAcordes } from './instrumentos.js';
+import { iniciarNuvem, cartaoConta, acaoConta } from './nuvem.js';
 
 const tela = document.getElementById('tela');
 const TONS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -531,6 +532,7 @@ function telaAjustes() {
       <label><input type="checkbox" id="mostrar" ${p.mostrarAcordes ? 'checked' : ''}> Mostrar acordes</label><br>
       <label><input type="checkbox" id="mono" ${p.mono ? 'checked' : ''}> Fonte monoespaçada (como no PDF)</label>
     </div>
+    <div id="conta">${cartaoConta()}</div>
     <div class="cartao">
       <h2 style="margin-top:0">Capas da missa</h2>
       <label class="campo"><span>Nome da paróquia ou comunidade (aparece embaixo, na capa)</span><input type="text" id="paroquia" value="${esc(p.paroquia || '')}" placeholder="Ex.: Paróquia Santa Rita"></label>
@@ -556,6 +558,8 @@ function telaAjustes() {
   $('#fonte').oninput = e => { p.fonte = +e.target.value; $('#vf').textContent = p.fonte + 'px'; salvarPrefs(); aplicarPrefs(); };
   $('#mostrar').onchange = e => { p.mostrarAcordes = e.target.checked; salvarPrefs(); };
   $('#mono').onchange = e => { p.mono = e.target.checked; salvarPrefs(); };
+  const caixaConta = $('#conta');
+  caixaConta.addEventListener('click', e => { const b = e.target.closest('[data-conta]'); if (b) acaoConta(b, caixaConta, () => { caixaConta.innerHTML = cartaoConta(); }); });
   $('#paroquia').onchange = e => { p.paroquia = e.target.value.trim(); salvarPrefs(); };
   $('#servidor').onchange = e => { p.servidor = e.target.value.replace(/\/$/, ''); salvarPrefs(); };
   $('#testar').onclick = async () => {
@@ -634,6 +638,12 @@ tela.innerHTML = '<p class="vazio">Carregando acervo...</p>';
 await carregarAcervo();
 iniciarPainel();
 rotear();
+// conta e grupo (Firebase): quando chegam as missas/cifras do grupo, redesenha as telas que mostram isso
+iniciarNuvem();
+window.addEventListener('nuvem-mudou', () => {
+  const h = location.hash || '';
+  if (/^#\/(ajustes|missas)$/.test(h) || (h.startsWith('#/missa/') && !document.querySelector('.modal-fundo'))) { const y = window.scrollY; rotear(); window.scrollTo(0, y); }
+});
 // missa do dia/fim de semana montada sozinha pela data (ao abrir e ao voltar para o app num outro dia)
 const automatica = () => missaAutomatica().then(m => {
   if (!m) return;
