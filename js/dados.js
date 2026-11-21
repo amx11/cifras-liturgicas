@@ -31,13 +31,13 @@ export const estado = {
 // nome certo da parte: Oração Eucarística (missas montadas antes diziam "Prece eucarística")
 for (const x of estado.missas) for (const it of x.itens || []) if (/^prece eucar[íi]stica/i.test(it.rotulo || '')) it.rotulo = it.rotulo.replace(/^prece eucar[íi]stica/i, 'Oração eucarística');
 
-export function salvarPrefs() { gravar(CHAVES.prefs, estado.prefs); }
-export function salvarTons() { gravar(CHAVES.tons, estado.tons); }
+export function salvarPrefs() { gravar(CHAVES.prefs, estado.prefs); ganchos.aoSalvar?.('prefs'); }
+export function salvarTons() { gravar(CHAVES.tons, estado.tons); ganchos.aoSalvar?.('tons'); }
 // ganchos da conta/grupo (nuvem.js): aoSalvar avisa o que mudou; grupoNovo diz se o que for criado agora é do grupo
 export const ganchos = { aoSalvar: null, grupoNovo: null };
 export function salvarMissas() { const ok = gravar(CHAVES.missas, estado.missas); ganchos.aoSalvar?.('missas'); return ok; }
 // grava no aparelho o que veio do grupo (sem mandar de volta para a nuvem)
-export function guardarNoAparelho() { gravar(CHAVES.missas, estado.missas); gravar(CHAVES.minhas, estado.minhas); }
+export function guardarNoAparelho() { gravar(CHAVES.missas, estado.missas); gravar(CHAVES.minhas, estado.minhas); gravar(CHAVES.edicoes, estado.edicoes); gravar(CHAVES.tons, estado.tons); gravar(CHAVES.prefs, estado.prefs); }
 export function recarregarIndice() { montarIndice(); }
 
 export async function carregarAcervo() {
