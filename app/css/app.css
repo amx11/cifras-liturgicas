@@ -572,3 +572,17 @@ h1 #renomear:hover, h1 #renomear:focus-visible { border-color: var(--linha); bac
 @media (prefers-reduced-motion: reduce) { :root[data-tema="ceu"] body::after { animation: none; } }
 body.modo-tocar::after { animation-play-state: paused; }
 @media print { body::after { display: none !important; } }
+
+/* Roteiro com cada parte separada: resposta rezada ou cantada */
+.modo-resposta { display: inline-flex; gap: 4px; margin: 4px 0 2px; }
+.modo-resposta .chip { padding: 3px 12px; font-size: 13px; min-height: 30px; }
+.slot-rezada { background: transparent; box-shadow: none; border-style: dashed; }
+.slot-rezada .parte { color: var(--suave); }
+.pn-slot.rezada { opacity: .7; }
+@media (pointer: coarse) { .modo-resposta .chip { min-height: 40px; } }
+/* montagem no celular: nome do canto em largura cheia (com o tom ao lado) e os botões numa linha embaixo */
+@media (max-width: 640px) {
+  .missa-slot { flex-wrap: wrap; row-gap: 8px; }
+  .missa-slot > .info { flex: 1 1 calc(100% - 56px) !important; }
+  .missa-slot > .acoes { flex: 1 1 100%; justify-content: flex-end; }
+}

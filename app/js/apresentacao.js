@@ -78,7 +78,7 @@ export function slidesDaMissa(x, { titulos = false, repetirRefrao = true, maxLin
   if (capa) slides.push({ tipo: 'capa', capa, ...textosDaCapa(x, capa, estado.prefs.paroquia) });   // capa desenhada (do tempo ou escolhida)
   for (const it of x.itens) {
     const m = it.chave && musica(it.chave);
-    if (!m?.chordpro) continue;
+    if (!m?.chordpro || it.modo === 'rezada') continue;   // parte rezada: sem canto
     if (soPrimeira && /\(\d+\)\s*$/.test(it.rotulo || '')) continue;      // "Glória (2)": opção extra do repertório
     const pars = paragrafos(m.chordpro);
     if (!pars.length) continue;
@@ -99,7 +99,7 @@ export function slidesDaMissa(x, { titulos = false, repetirRefrao = true, maxLin
 
 // ---------- Opções ----------
 export function apresentacaoMissa(x) {
-  const n = x.itens.filter(it => it.chave && musica(it.chave)?.chordpro).length;
+  const n = x.itens.filter(it => it.chave && musica(it.chave)?.chordpro && it.modo !== 'rezada').length;
   if (!n) { aviso('Escolha pelo menos um canto antes de montar a apresentação'); return; }
   const { el, fechar } = modal(`
     <h2 style="margin-top:0">Apresentação de “${esc(x.titulo)}”</h2>

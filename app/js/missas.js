@@ -9,13 +9,92 @@ import { desenharPDF } from './visualizar-pdf.js';
 import { ORACOES, nomeOracao, urlOracao } from './oracoes.js';
 import { conta, coordenador } from './nuvem.js';
 
-// Roteiro padrão: rótulo exibido e parte da missa usada para sugerir cantos
-const ROTEIRO = [
-  ['Entrada', 4], ['Ato penitencial', 5], ['Glória', 1], ['Salmo responsorial', 6], ['Aclamação ao Evangelho', 3],
-  ['Apresentação das oferendas', 10], ['Oração Eucarística', 20, 'oe'], ['Santo', 2],
-  ['Oração eucarística: aclamação memorial', 20], ['Oração eucarística: doxologia e Amém', 20], ['Cordeiro de Deus', 15], ['Comunhão', 16],
-  ['Ação de graças', 18], ['Canto a Maria', 90], ['Final', 18],
+// Roteiro da missa (Missal Romano, 3ª edição): cada momento é uma parte própria, na ordem da celebração.
+// [rótulo, parte, opções] — opcional: pode ficar sem canto; resposta: o povo responde, 'rezada' (sem cifra) ou 'cantada'
+// (com cifra do acervo), começa no modo indicado; sugerir: partes do acervo onde procurar o canto se a parte própria não tiver nenhum.
+const OE_RESP = [23, 24, 20];
+export const ROTEIRO = [
+  ['Entrada', 4],
+  ['Sinal da cruz', 21, { opcional: true, resposta: 'rezada', sugerir: [19] }],
+  ['Saudação', 22, { resposta: 'rezada', sugerir: [19] }],
+  ['Ato penitencial', 5, { resposta: 'cantada' }],
+  ['Glória', 1, { opcional: true }],
+  ['Oração do dia', 26, { resposta: 'rezada', sugerir: [19] }],
+  ['Salmo responsorial', 6],
+  ['Sequência', 27, { opcional: true, sugerir: [3] }],
+  ['Aclamação ao Evangelho', 3],
+  ['Creio', 28, { resposta: 'rezada', sugerir: [3] }],
+  ['Oração dos fiéis', 29, { resposta: 'rezada', sugerir: [18, 3] }],
+  ['Apresentação das oferendas', 10],
+  ['Oração Eucarística', 20, { tipo: 'oe' }],
+  ['Diálogo do prefácio', 30, { resposta: 'rezada', sugerir: OE_RESP }],
+  ['Santo', 2],
+  ['Aclamação: Enviai o vosso Espírito', 31, { resposta: 'rezada', sugerir: OE_RESP }],
+  ['Mistério da fé: aclamação memorial', 23, { resposta: 'cantada' }],
+  ['Aclamações das intercessões', 32, { resposta: 'rezada', sugerir: OE_RESP }],
+  ['Doxologia e Amém', 24, { resposta: 'cantada' }],
+  ['Pai-nosso', 33, { resposta: 'rezada', sugerir: [19] }],
+  ['Canto da paz', 34, { opcional: true, sugerir: [18] }],
+  ['Cordeiro de Deus', 15],
+  ['Comunhão', 16],
+  ['Ação de graças', 25, { opcional: true, sugerir: [16, 18] }],
+  ['Canto a Maria', 90, { opcional: true }],
+  ['Canto final', 18],
 ];
+const DEF = new Map(ROTEIRO.map(([rotulo, parte, o = {}]) => [parte, { rotulo, parte, ...o }]));
+export const defParte = p => DEF.get(p) || null;
+const novoItem = ([rotulo, parte, o = {}]) => ({ rotulo, parte, chave: null, tom: null,
+  ...(o.tipo ? { tipo: o.tipo, oe: null } : {}), ...(o.resposta ? { modo: o.resposta } : {}) });
+export const roteiroVazio = () => ROTEIRO.map(novoItem);
+// resposta do povo rezada (sem canto): não entra no Tocar, nas cifras, no PDF nem nos slides
+export const rezada = it => it?.modo === 'rezada';
+// parte para procurar o canto: a própria, ou (se o acervo ainda não tiver nenhum dela) a sugerida
+export function parteParaBusca(it) {
+  if (!it?.parte) return null;
+  const tem = p => estado.musicas.some(m => m.partes?.includes(p));
+  if (tem(it.parte)) return it.parte;
+  return defParte(it.parte)?.sugerir?.find(tem) ?? null;
+}
+
+// Missas montadas antes (roteiro antigo, partes juntas): cada canto vai para a sua parte no roteiro novo;
+// canto a mais da mesma parte ("Comunhão (2)") entra logo depois dela; parte sem lugar fica depois do canto anterior.
+const semAcento = t => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function parteNova(it) {
+  if (it.tipo === 'oe') return 20;
+  const r = semAcento(it.rotulo);
+  if (it.parte === 20 || /memorial|doxologia/.test(r)) return /doxologia|amem/.test(r) ? 24 : 23;
+  if (it.parte === 18) return /acao de gracas/.test(r) ? 25 : /final|envio/.test(r) ? 18 : null;
+  if (it.parte === 3 && /sequencia/.test(r)) return 27;
+  return DEF.has(it.parte) && it.parte !== 20 ? it.parte : null;
+}
+export function encaixarNoRoteiro(velhos) {
+  const novos = roteiroVazio();
+  let depois = -1;
+  for (const v of velhos) {
+    const p = parteNova(v);
+    const k = p != null ? novos.findIndex(n => n.parte === p && !n.chave && !n.oe) : -1;
+    if (k >= 0 && (v.chave || v.oe)) {
+      Object.assign(novos[k], { chave: v.chave ?? null, tom: v.tom ?? null }, v.tipo === 'oe' ? { oe: v.oe, sugerida: v.sugerida } : {});
+      if (novos[k].modo && v.chave) novos[k].modo = 'cantada';
+      depois = k; continue;
+    }
+    if (!v.chave) continue;            // parte vazia do roteiro antigo: o novo já tem a sua
+    const ult = p != null ? novos.map(n => n.parte).lastIndexOf(p) : -1;
+    const pos = (ult >= 0 ? ult : depois) + 1;
+    novos.splice(pos, 0, { ...v, parte: p ?? v.parte, ...(defParte(p)?.resposta ? { modo: 'cantada' } : {}) });
+    // canto extra de parte conhecida vai para junto da sua parte sem arrastar os seguintes; o sem parte segue o anterior
+    if (p == null) depois = pos; else if (pos <= depois) depois++;
+  }
+  return novos;
+}
+// Oração Eucarística: a do folheto, ou sugerida pela data (domingo e solenidade: III; dia de semana: II) — o padre confirma
+export const oracaoSugerida = x => { const d = x?.data ? new Date(x.data + 'T12:00') : null; return !d || d.getDay() === 0 || x.tempo === 7 ? 'III' : 'II'; };
+export function garantirOracao(x) {
+  const oe = x.itens.find(it => it.tipo === 'oe');
+  if (!oe || oe.oe) return false;
+  oe.oe = oracaoSugerida(x); oe.sugerida = true;
+  return true;
+}
 
 const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const achar = id => estado.missas.find(x => x.id === id);
@@ -42,7 +121,7 @@ export function definirFoco(i) {
 }
 
 const proximoVazio = (x, depoisDe) => {
-  const i = x.itens.findIndex((it, n) => n > depoisDe && !it.chave);
+  const i = x.itens.findIndex((it, n) => n > depoisDe && !it.chave && !it.tipo && !rezada(it));   // pula a oração e as partes rezadas
   return i < 0 ? null : i;
 };
 
@@ -59,7 +138,7 @@ export function adicionarNaMissa(x, chave, tom) {
     foco.idx = proximoVazio(x, idx);
   } else {
     idx = x.itens.findIndex(it => !it.chave && partes.includes(it.parte));
-    if (idx < 0 && !partes.length) idx = x.itens.findIndex(it => !it.chave);
+    if (idx < 0 && !partes.length) idx = x.itens.findIndex(it => !it.chave && !it.tipo && !rezada(it));
     if (idx < 0 && partes.length) {
       // todas as partes que combinam já têm canto: acrescenta outro logo depois da última delas
       let ult = -1; x.itens.forEach((it, n) => { if (partes.includes(it.parte)) ult = n; });
@@ -71,6 +150,7 @@ export function adicionarNaMissa(x, chave, tom) {
   }
   x.itens[idx].chave = chave;
   x.itens[idx].tom = t;
+  if (x.itens[idx].modo) x.itens[idx].modo = 'cantada';   // pôs canto numa resposta: passa a ser cantada
   salvarMissa();
   return x.itens[idx];
 }
@@ -192,10 +272,15 @@ export function itensDoRepertorio(rep) {
     const tom = tomDoTexto(c.texto);
     itens.push({ rotulo: cont[rotulo] > 1 ? `${rotulo} (${cont[rotulo]})` : rotulo, parte, chave: m.chave, tom: tom && tom !== m.tom ? tom : null });
   }
-  return { itens: comOracao(itens), fora };
+  return { itens: encaixarNoRoteiro(itens), fora };
 }
-// missas já montadas com Santo/aclamações ganham o item da Oração Eucarística (vazio, para escolher)
-for (const x of estado.missas) if (x.itens?.some(it => it.parte === 2 || it.parte === 20)) comOracao(x.itens);
+// missas guardadas no aparelho com o roteiro antigo: passam uma vez para o roteiro com as partes separadas
+// (as do ministério passam quando o coordenador abre a montagem — ver telaMissa)
+{
+  let migrou = false;
+  for (const x of estado.missas) if (x.roteiro !== 2 && !x.grupo) { x.itens = encaixarNoRoteiro(x.itens || []); x.roteiro = 2; garantirOracao(x); migrou = true; }
+  if (migrou) salvarMissas();
+}
 // a Oração Eucarística (texto) entra antes do Santo (ou das aclamações dela / do Cordeiro), se ainda não houver
 export function comOracao(itens) {
   if (itens.some(it => it.tipo === 'oe')) return itens;
@@ -326,8 +411,9 @@ export async function missaDaData(data) {
   const r = repertorioDaData(reps, data);
   const d = new Date(data + 'T12:00');
   x = { id: novoId(), titulo: r?.nome || fol?.titulo || 'Missa', data: r?.data || data, tempo: tempoPorData(d), ano: anoPorData(d), repertorio: r?.id,
-    itens: r ? itensDoRepertorio(r).itens : ROTEIRO.map(([rotulo, parte, tipo]) => ({ rotulo, parte, chave: null, tom: null, ...(tipo ? { tipo } : {}) })) };
+    roteiro: 2, itens: r ? itensDoRepertorio(r).itens : roteiroVazio() };
   if (fol) aplicarFolheto(x.itens, fol);
+  garantirOracao(x);
   estado.missas.push(x);
   if (r) estado.prefs.missasAutomaticas = [...(estado.prefs.missasAutomaticas || []), r.id].slice(-60);
   estado.prefs.missaAtiva = x.id; foco.idx = null; salvarPrefs(); salvar();
@@ -481,9 +567,10 @@ export function novaMissa(aoCriar, { data: dataInicial } = {}) {
     const rep = reps.find(x => String(x.id) === f.rep.value);
     const missa = { id: novoId(), ...(coordenador() && f.onde?.value === 'ministerio' ? { grupo: conta.grupo } : {}), titulo: f.titulo.value.trim() || 'Missa', data: f.data.value, tempo: +f.tempo.value || null,
       ano: +f.ano.value || null, repertorio: rep ? rep.id : undefined,
-      itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? ROTEIRO.map(([rotulo, parte, tipo]) => ({ rotulo, parte, chave: null, tom: null, ...(tipo ? { tipo } : {}) })) : [] };
+      roteiro: 2, itens: rep ? itensDoRepertorio(rep).itens : f.roteiro.checked ? roteiroVazio() : [] };
     const fol = folhetoDoForm();
     if (fol) aplicarFolheto(missa.itens, fol);
+    garantirOracao(missa);
     estado.missas.push(missa); estado.prefs.missaAtiva = missa.id; salvarPrefs(); foco.idx = null; salvar(); fechar();
     if (rep) aviso(`Missa montada com o repertório da Arquidiocese: ${rep.nome}`);
     if (aoCriar) aoCriar(missa); else if (rep) location.hash = '#/missa/' + missa.id; else if (location.hash === '#/musicas') window.dispatchEvent(new Event('missa-mudou')); else location.hash = '#/musicas';
@@ -499,6 +586,7 @@ export function telaMissa(tela, id, modo) {
   // missa do grupo: só o coordenador monta e edita; o músico vê, toca, apresenta e pode duplicar (cópia sua)
   const soLer = !!x.grupo && !coordenador();
   if (soLer) modo = 'ler';
+  if (!soLer && x.roteiro !== 2) { x.itens = encaixarNoRoteiro(x.itens || []); x.roteiro = 2; garantirOracao(x); salvarMissas(); }
   const redesenhar = (novoModo = modo) => { const y = window.scrollY; telaMissa(tela, id, novoModo); window.scrollTo(0, y); };
   const tx = estado.taxonomia;
 
@@ -543,7 +631,7 @@ export function telaMissa(tela, id, modo) {
         <div class="info" style="flex:1;min-width:0">
           <div class="parte">${esc(it.rotulo || 'Oração Eucarística')}</div>
           <select data-acao="oe" aria-label="Qual Oração Eucarística"><option value="">— escolher a oração —</option>${ORACOES.map(([k, v]) => `<option value="${k}" ${it.oe === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
-          ${it.oe ? `<div class="pequeno" style="margin-top:.3em"><button class="link-versao" data-acao="ver-oe">Ver o texto ▾</button></div>` : ''}
+          ${it.oe ? `<div class="pequeno" style="margin-top:.3em">${it.sugerida ? '<span class="selo" title="Escolhida pela data: domingo e solenidade III, dia de semana II">sugerida, confirme com o padre</span> ' : ''}<button class="link-versao" data-acao="ver-oe">Ver o texto ▾</button></div>` : ''}
           <div class="oe-texto" hidden></div>
         </div>
         <div class="acoes">
@@ -552,18 +640,25 @@ export function telaMissa(tela, id, modo) {
           <button class="btn peq perigo" data-acao="remover" title="Remover">✕</button>
         </div></div>`;
       const m = it.chave && musica(it.chave);
-      return `<div class="cartao missa-slot" data-i="${i}">
+      const def = defParte(it.parte);
+      const reza = rezada(it);
+      const chaveModo = it.modo ? `<span class="modo-resposta" role="group" aria-label="Rezada ou cantada">
+          <button type="button" class="chip" data-acao="modo" data-modo="rezada" aria-pressed="${reza}">Rezada</button>
+          <button type="button" class="chip" data-acao="modo" data-modo="cantada" aria-pressed="${!reza}">Cantada</button></span>` : '';
+      return `<div class="cartao missa-slot${reza ? ' slot-rezada' : ''}" data-i="${i}">
         <div class="info" style="flex:1;min-width:0">
-          <div class="parte">${esc(it.rotulo || nomeParte(it.parte) || 'Canto')}</div>
-          ${m ? `<a href="#/musica/${esc(m.chave)}" class="nome" style="font-weight:600">${esc(m.nome)}</a>${m.complemento ? `<div class="comp pequeno suave">${esc(m.complemento)}</div>` : ''}${m.totalVersoes > 1 ? `<div class="pequeno"><button class="link-versao" data-acao="versao">${esc(rotuloVersao(m).titulo)} de ${m.totalVersoes} ▾</button></div>` : ''}`
-            : it.chave ? '<span class="suave">Música não encontrada</span>' : '<span class="suave">— escolher canto —</span>'}
+          <div class="parte">${esc(it.rotulo || nomeParte(it.parte) || 'Canto')}${def?.opcional ? ' <span class="selo">opcional</span>' : ''}</div>
+          ${chaveModo}
+          ${reza ? '<div class="pequeno suave">Rezada: o povo responde falando, sem canto.</div>'
+            : m ? `<a href="#/musica/${esc(m.chave)}" class="nome" style="font-weight:600">${esc(m.nome)}</a>${m.complemento ? `<div class="comp pequeno suave">${esc(m.complemento)}</div>` : ''}${m.totalVersoes > 1 ? `<div class="pequeno"><button class="link-versao" data-acao="versao">${esc(rotuloVersao(m).titulo)} de ${m.totalVersoes} ▾</button></div>` : ''}`
+            : it.chave ? '<span class="suave">Música não encontrada</span>' : `<span class="suave">— escolher canto${def?.opcional ? ' (ou deixar sem)' : ''} —</span>`}
         </div>
-        ${m?.tom ? `<span class="tom" title="Tom">${esc(it.tom || m.tom)}</span>` : ''}
+        ${m?.tom && !reza ? `<span class="tom" title="Tom">${esc(it.tom || m.tom)}</span>` : ''}
         <div class="acoes">
-          <button class="btn peq primario" data-acao="trocar">${m ? 'Trocar' : 'Escolher'}</button>
+          ${reza ? '' : `<button class="btn peq primario" data-acao="trocar">${m ? 'Trocar' : 'Escolher'}</button>`}
           <button class="btn peq" data-acao="subir" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
           <button class="btn peq" data-acao="descer" title="Descer" ${i === x.itens.length - 1 ? 'disabled' : ''}>↓</button>
-          ${m ? '<button class="btn peq" data-acao="pers" title="Personalizar a cifra ou a letra (fica como versão personalizada)">✎ Personalizar</button>' : ''}
+          ${m && !reza ? '<button class="btn peq" data-acao="pers" title="Personalizar a cifra ou a letra (fica como versão personalizada)">✎ Personalizar</button>' : ''}
           <button class="btn peq" data-acao="renomear" title="Renomear parte">Aa</button>
           <button class="btn peq perigo" data-acao="remover" title="Remover">✕</button>
         </div></div>`;
@@ -571,7 +666,8 @@ export function telaMissa(tela, id, modo) {
 
     corpo.addEventListener('change', e => {
       if (e.target.dataset.acao !== 'oe') return;
-      x.itens[+e.target.closest('[data-i]').dataset.i].oe = e.target.value || null;
+      const oe = x.itens[+e.target.closest('[data-i]').dataset.i];
+      oe.oe = e.target.value || null; delete oe.sugerida;
       salvar(); redesenhar();
     });
     corpo.addEventListener('click', async e => {
@@ -579,6 +675,7 @@ export function telaMissa(tela, id, modo) {
       const i = +b.closest('[data-i]').dataset.i;
       const it = x.itens[i];
       if (b.dataset.acao === 'oe') return;
+      if (b.dataset.acao === 'modo') { it.modo = b.dataset.modo; salvar(); redesenhar(); return; }
       if (b.dataset.acao === 'ver-oe') return mostrarOracao(b, b.closest('.missa-slot').querySelector('.oe-texto'), it.oe);
       if (b.dataset.acao === 'trocar') return escolherCanto(x, it, () => { salvar(); redesenhar(); });
       if (b.dataset.acao === 'versao') {
@@ -619,7 +716,7 @@ export function telaMissa(tela, id, modo) {
     corpo.classList.add('quebra-livre');
     const indice = document.createElement('div');
     indice.className = 'cartao nao-imprimir';
-    indice.innerHTML = x.itens.filter(it => it.chave && musica(it.chave)).map((it, i) =>
+    indice.innerHTML = x.itens.filter(it => it.chave && musica(it.chave) && !rezada(it)).map((it, i) =>
       `<a href="#" data-ir="${i}" class="pequeno" style="display:inline-block;margin:2px 8px 2px 0">${esc(it.rotulo)}: ${esc(musica(it.chave).nome)}</a>`).join('') || 'Nenhum canto escolhido ainda.';
     corpo.append(indice);
     let n = 0;
@@ -634,7 +731,7 @@ export function telaMissa(tela, id, modo) {
         continue;
       }
       const m = it.chave && musica(it.chave);
-      if (!m) continue;
+      if (!m || rezada(it)) continue;
       const sec = document.createElement('section');
       sec.className = 'missa-cancao';
       sec.id = 'canto-' + n++;
@@ -663,6 +760,7 @@ export function telaMissa(tela, id, modo) {
     const linhas = [`${x.titulo}${x.data ? ' — ' + new Date(x.data + 'T12:00').toLocaleDateString('pt-BR') : ''}`, ''];
     for (const it of x.itens) {
       const m = it.chave && musica(it.chave);
+      if (rezada(it)) continue;
       if (m) linhas.push(`${it.rotulo}: ${m.nome}${(it.tom || m.tom) ? ` (${it.tom || m.tom})` : ''}`);
       else if (it.tipo === 'oe' && it.oe) linhas.push(`${it.rotulo || 'Oração Eucarística'}: ${nomeOracao(it.oe)}`);
     }
@@ -715,7 +813,7 @@ function mostrarOracao(botao, alvo, id) {
 
 // Escolher o canto de uma parte: já filtra pelo tempo da missa e pela parte, em ordem alfabética
 function escolherCanto(x, it, aoEscolher) {
-  const f = { termo: '', tempo: x.tempo, parte: it.parte };
+  const f = { termo: '', tempo: x.tempo, parte: parteParaBusca(it) };
   const tx = estado.taxonomia;
   const { el, fechar } = modal(`
     <div class="barra" style="justify-content:space-between;margin-top:0"><b>${esc(it.rotulo)}</b><button class="btn peq" data-fechar>Fechar</button></div>
@@ -766,6 +864,7 @@ function escolherCanto(x, it, aoEscolher) {
 function trocarChave(it, chave) {
   it.chave = chave;
   it.tom = estado.tons[chave] || null;
+  if (chave && it.modo) it.modo = 'cantada';
 }
 
 // Lista as versões de uma música com prévia das primeiras linhas, para comparar as melodias
@@ -792,7 +891,7 @@ export function escolherMissaPara(m, tom) {
     const pronto = () => { salvar(); fechar(); aviso(`Adicionada a “${x.titulo}”`); };
     el.addEventListener('click', e => {
       const b = e.target.closest('[data-i]'); if (!b) return;
-      Object.assign(x.itens[+b.dataset.i], { chave: m.chave, tom: tom && tom !== m.tom ? tom : null });
+      Object.assign(x.itens[+b.dataset.i], { chave: m.chave, tom: tom && tom !== m.tom ? tom : null }, x.itens[+b.dataset.i].modo ? { modo: 'cantada' } : {});
       pronto();
     });
     el.querySelector('#nova-parte').onclick = () => {
