@@ -25,7 +25,12 @@ export function aplicarPrefs() {
   document.documentElement.style.setProperty('--fonte-cifra', p.fonte + 'px');
   if (p.tema === 'auto') document.documentElement.removeAttribute('data-tema');
   else document.documentElement.dataset.tema = p.tema;
+  // cor da barra do sistema (Android / app instalado) acompanha o tema
+  const escuro = p.tema === 'escuro' || (p.tema === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const cor = p.tema === 'ceu' ? '#2468b0' : escuro ? '#18201d' : '#2f5d50';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', cor);
 }
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => aplicarPrefs());
 
 // ---------- Painel de cifra (usado na tela da música e na missa) ----------
 // tomAlvo: tom desejado; aoMudarTom(novoTom) é chamado quando o usuário troca
@@ -525,6 +530,7 @@ function telaAjustes() {
     <h1>Ajustes</h1>
     <div class="cartao">
       <label class="campo"><span>Tema</span><select id="tema">
+        <option value="ceu" ${p.tema === 'ceu' ? 'selected' : ''}>Céu (azul celeste)</option>
         <option value="auto" ${p.tema === 'auto' ? 'selected' : ''}>Automático (igual ao sistema)</option>
         <option value="claro" ${p.tema === 'claro' ? 'selected' : ''}>Claro</option>
         <option value="escuro" ${p.tema === 'escuro' ? 'selected' : ''}>Escuro</option></select></label>

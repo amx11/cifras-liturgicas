@@ -41,7 +41,7 @@ abrindo em janela própria e funcionando sem internet.
   para o próximo (botão, setas do teclado ou deslizando o dedo).
 - **Importar**: PDF de cifra (um ou vários), cifra colada de qualquer site, arquivo de áudio ou link do YouTube.
 - **Ouvir**: mostra o acorde que está tocando pelo microfone, grava e cifra, e reconhece a música pelo trecho cantado.
-- **Ajustes**: tema claro/escuro, fonte, backup das missas e músicas para levar a outro aparelho.
+- **Ajustes**: tema Céu (azul celeste, o padrão), claro, escuro ou automático, fonte, backup das missas e músicas para levar a outro aparelho.
 
 As missas, músicas próprias, edições e tons ficam salvos no próprio aparelho (use o backup em Ajustes).
 

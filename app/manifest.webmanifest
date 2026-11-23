@@ -6,8 +6,8 @@
   "start_url": "./#/musicas",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f6f4ef",
-  "theme_color": "#2f5d50",
+  "background_color": "#eef6fd",
+  "theme_color": "#2468b0",
   "icons": [
     {
       "src": "icone-192.png",

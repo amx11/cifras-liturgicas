@@ -12,7 +12,7 @@ function gravar(chave, valor) {
 }
 
 export const PREFS_PADRAO = {
-  fonte: 17, tema: 'auto', mostrarAcordes: true, mono: false,
+  fonte: 17, tema: 'ceu', mostrarAcordes: true, mono: false,
   servidor: location.protocol === 'file:' ? 'http://localhost:8765' : (location.port === '8765' ? location.origin : 'http://localhost:8765'),
 };
 
@@ -28,6 +28,12 @@ export const estado = {
   tons: ler(CHAVES.tons, {}),
   missas: ler(CHAVES.missas, []),
 };
+// tema Céu virou o padrão: quem estava no automático passa para o Céu uma vez (quem escolheu claro/escuro fica como está)
+if (!estado.prefs.temaCeu) {
+  if (estado.prefs.tema === 'auto') estado.prefs.tema = 'ceu';
+  estado.prefs.temaCeu = true;
+  gravar(CHAVES.prefs, estado.prefs);
+}
 // nome certo da parte: Oração Eucarística (missas montadas antes diziam "Prece eucarística")
 for (const x of estado.missas) for (const it of x.itens || []) if (/^prece eucar[íi]stica/i.test(it.rotulo || '')) it.rotulo = it.rotulo.replace(/^prece eucar[íi]stica/i, 'Oração eucarística');
 
