@@ -7,7 +7,8 @@ export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;'
 export const ORDEM_TEMPOS = [1, 4, 5, 2, 6, 3, 7];
 export const COR_TEMPO = { 1: 'var(--t-advento)', 4: 'var(--t-natal)', 5: 'var(--t-comum)', 2: 'var(--t-quaresma)',
   6: 'var(--t-semana)', 3: 'var(--t-pascal)', 7: 'var(--t-festas)' };
-export const ORDEM_PARTES = [4, 19, 5, 1, 6, 3, 10, 2, 20, 15, 16, 90, 18];
+// ordem da missa (roteiro com cada momento separado); 19 = respostas da assembleia em geral
+export const ORDEM_PARTES = [4, 21, 22, 19, 5, 1, 26, 6, 27, 3, 28, 29, 10, 20, 30, 2, 31, 23, 32, 24, 33, 34, 15, 16, 25, 90, 18];
 
 export const nomeTempo = id => estado.taxonomia.tempos[id] || '';
 export const nomeParte = id => estado.taxonomia.partes[id] || '';

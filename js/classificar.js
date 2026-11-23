@@ -13,6 +13,16 @@ const n = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 const PRECE = /^(aclamacao memorial|aclamacao (apos|depois) a consagracao|doxologia|grande amem|prece eucaristica|oracao eucaristica|dialogo do prefacio|prefacio)\b/;
 const PRECE_LETRA = /anunciamos,? senhor,? a vossa morte|todas as vezes que comemos|salvador do mundo,? salvai-nos|por cristo,? com cristo/;
+// partes próprias do roteiro (21 Sinal da cruz, 27 Sequência, 28 Creio, 29 Oração dos fiéis, 33 Pai-nosso, 34 Canto da paz, 25 Ação de graças)
+const PARTE_PROPRIA = [
+  [21, /^(sinal da cruz|em nome do pai\b)/],
+  [27, /\bsequencia\b/],
+  [28, /^(creio|profissao de fe|simbolo)\b/],
+  [29, /^(oracao dos fieis|preces|escutai,? senhor|senhor,? escutai|ouvi-nos|escuta,? senhor)\b|\bresposta(s)? das preces\b/],
+  [33, /^pai[- ]nosso\b/],
+  [34, /^(canto da paz|a paz\b|paz\b|dai-nos a paz|saudacao da paz)/],
+  [25, /\bacao de gracas\b/],
+];
 // parte da missa pelo título (só para quem não tem classificação)
 const PELO_TITULO = [
   [15, /^cordeiro\b/],
@@ -56,9 +66,13 @@ export function revisarClassificacao(grupos) {
     // Oração Eucarística: aclamação memorial ("Anunciamos, Senhor…", "Todas as vezes…", "Salvador do mundo…"),
     // doxologia ("Por Cristo, com Cristo…") e Amém — parte própria, depois do Santo
     if (PRECE.test(titulo) || (/^(amem|mist[eé]rio da f[eé])$/.test(titulo) && PRECE_LETRA.test(n(m.chordpro).replace(/\[[^\]]*\]/g, '')))) {
-      m.partes = [20];
+      // cada resposta na sua parte (roteiro com os momentos separados); o resto da prece fica em 20
+      m.partes = [/^dialogo do prefacio|^prefacio/.test(titulo) ? 30 : /^(doxologia|grande amem|amem)/.test(titulo) || /por cristo,? com cristo/.test(n(m.chordpro)) ? 24
+        : /^(aclamacao|misterio da fe)/.test(titulo) ? 23 : 20];
       m.tempos = [...TODOS];   // texto fixo do Missal: serve o ano todo
     }
+    // partes próprias do roteiro, pelo título (a parte do acervo continua; esta só acrescenta)
+    for (const [p, re] of PARTE_PROPRIA) if (re.test(titulo) && !(m.partes || []).includes(p)) m.partes = [...(m.partes || []), p];
     // 2) pelo título
     if (!m.partes?.length) {
       const letra = n((m.chordpro || '').replace(/\[[^\]]*\]/g, '')).replace(/\s+/g, ' ');

@@ -11,6 +11,14 @@ function gravar(chave, valor) {
   try { localStorage.setItem(chave, JSON.stringify(valor)); return true; } catch { return false; }
 }
 
+// Partes da missa que o app acrescenta às da Arquidiocese: cada momento separado (5 = só "Ato penitencial")
+export const PARTES_DO_ROTEIRO = {
+  2: 'Santo', 5: 'Ato penitencial', 20: 'Oração Eucarística', 90: 'Canto a Maria',
+  21: 'Sinal da cruz', 22: 'Saudação', 23: 'Mistério da fé: aclamação memorial', 24: 'Doxologia e Amém', 25: 'Ação de graças',
+  26: 'Oração do dia', 27: 'Sequência', 28: 'Creio', 29: 'Oração dos fiéis', 30: 'Diálogo do prefácio',
+  31: 'Aclamação: Enviai o vosso Espírito', 32: 'Aclamações das intercessões', 33: 'Pai-nosso', 34: 'Canto da paz',
+};
+
 export const PREFS_PADRAO = {
   fonte: 17, tema: 'ceu', mostrarAcordes: true, mono: false,
   servidor: location.protocol === 'file:' ? 'http://localhost:8765' : (location.port === '8765' ? location.origin : 'http://localhost:8765'),
@@ -52,7 +60,8 @@ export async function carregarAcervo() {
     const r = await fetch('data/musicas.json', { cache: 'no-cache' });
     if (r.ok) dados = await r.json();
   } catch { /* sem acervo: segue só com as músicas próprias */ }
-  estado.taxonomia = { tempos: dados.tempos || {}, partes: { ...(dados.partes || {}), 2: 'Santo', 20: 'Oração Eucarística', 90: 'Canto a Maria' }, categorias: dados.categorias || {}, anos: dados.anos || {} };
+  // partes do acervo + as partes próprias do roteiro (cada momento da missa separado, Missal 3ª edição)
+  estado.taxonomia = { tempos: dados.tempos || {}, partes: { ...(dados.partes || {}), ...PARTES_DO_ROTEIRO }, categorias: dados.categorias || {}, anos: dados.anos || {} };
   estado.fonte = dados.fonte;
   estado.atualizado = dados.atualizado;
   // Correções revisadas (gravadas pelo servidor local em data/correcoes.json) valem para todos os aparelhos

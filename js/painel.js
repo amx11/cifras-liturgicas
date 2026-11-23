@@ -40,13 +40,14 @@ export function renderPainel() {
         const m = it.chave && musica(it.chave);
         const tom = m ? (it.tom || estado.tons[m.chave] || m.tom || '') : '';
         const nv = m ? versoes(m).length : 0;
-        return `<li class="pn-slot${foco.idx === i ? ' foco' : ''}${m ? '' : ' vazio'}" data-i="${i}">
+        const reza = it.modo === 'rezada';
+        return `<li class="pn-slot${foco.idx === i ? ' foco' : ''}${m && !reza ? '' : ' vazio'}${reza ? ' rezada' : ''}" data-i="${i}">
           <div class="pn-linha" data-pn="foco" role="button" tabindex="0" title="${foco.idx === i ? 'Parar de filtrar por esta parte' : 'Mostrar só os cantos desta parte'}">
             <span class="pn-parte">${esc(it.rotulo || 'Canto')}</span>
-            ${m ? `<a class="pn-nome" href="#/musica/${esc(m.chave)}">${esc(m.nome)}</a>` : '<span class="pn-nome suave">— escolher —</span>'}
+            ${reza ? '<span class="pn-nome suave">rezada</span>' : m ? `<a class="pn-nome" href="#/musica/${esc(m.chave)}">${esc(m.nome)}</a>` : '<span class="pn-nome suave">— escolher —</span>'}
             ${m && (nv > 1 || m.personalizada) ? `<span class="pn-versao">${esc(rotuloVersao(m).titulo)}</span>` : ''}
           </div>
-          ${m ? `<div class="pn-acoes">
+          ${m && !reza ? `<div class="pn-acoes">
             ${tom ? `<span class="tom">${esc(tom)}</span>` : ''}
             ${nv > 1 ? '<button class="btn peq" data-pn="versao" title="Escolher outra versão (melodia)">🎼</button>' : ''}
             <button class="btn peq" data-pn="pers" title="Personalizar a cifra ou a letra">✎</button>

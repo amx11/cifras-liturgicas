@@ -5,7 +5,7 @@ import { renderizarHTML, renderizarTexto, semitonsEntre, preferirBemol, transpor
   ehLinhaDeAcordes, chordproNoTom, transporAcorde } from './cifra.js';
 import { esc, aviso, modal, confirmar, ORDEM_TEMPOS, ORDEM_PARTES, COR_TEMPO, nomeTempo, nomeParte,
   listaAlfabetica, itemMusica, baixarArquivo, irPara } from './ui.js';
-import { telaMissas, telaMissa, escolherMissaPara, missaAtiva, foco, definirFoco, adicionarComAviso, listaVersoes, novaMissa, missaAutomatica } from './missas.js';
+import { telaMissas, telaMissa, escolherMissaPara, missaAtiva, foco, definirFoco, adicionarComAviso, listaVersoes, novaMissa, missaAutomatica, parteParaBusca } from './missas.js';
 import { iniciarPainel, abrirPainel } from './painel.js';
 import { desenharPDF } from './visualizar-pdf.js';
 import { telaImportar } from './importar.js';
@@ -198,7 +198,7 @@ function telaMusicas() {
   const slot = x && foco.idx != null ? x.itens[foco.idx] : null;
   const marcaParte = slot ? `${x.id}:${foco.idx}:${slot.parte}` : null;
   if (marcaParte !== (filtro.autoParte ?? null)) {
-    if (slot) filtro.parte = slot.parte ?? null; else if (filtro.autoParte) filtro.parte = null;
+    if (slot) filtro.parte = parteParaBusca(slot); else if (filtro.autoParte) filtro.parte = null;
     filtro.autoParte = marcaParte;
   }
   tela.innerHTML = `
@@ -215,7 +215,7 @@ function telaMusicas() {
     </div>
     <div class="filtros">
       <select id="parte" aria-label="Parte da missa"><option value="">Todas as partes da missa</option>
-        ${ORDEM_PARTES.filter(p => tx.partes[p]).map(p => `<option value="${p}" ${filtro.parte === p ? 'selected' : ''}>${esc(tx.partes[p])}</option>`).join('')}</select>
+        ${ORDEM_PARTES.filter(p => tx.partes[p] && (filtro.parte === p || estado.musicas.some(m => m.partes?.includes(p)))).map(p => `<option value="${p}" ${filtro.parte === p ? 'selected' : ''}>${esc(tx.partes[p])}</option>`).join('')}</select>
       <select id="ano" aria-label="Ano litúrgico"><option value="">Todos os anos (A, B, C)</option>
         ${Object.entries(tx.anos).map(([k, v]) => `<option value="${k}" ${filtro.ano === +k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
         <option value="minha" ${filtro.origem === 'minha' ? 'selected' : ''}>Só as minhas músicas</option>

@@ -26,7 +26,7 @@ export function dadosDaMissa(x, { acordes = true } = {}) {
   const cantos = [];
   for (const it of x.itens) {
     const m = it.chave && musica(it.chave);
-    if (!m) continue;
+    if (!m || it.modo === 'rezada') continue;   // parte rezada: sem canto
     const tom = it.tom || estado.tons[m.chave] || m.tom || '';
     const semitons = m.tom && tom ? semitonsEntre(m.tom, tom) : 0;
     cantos.push({
@@ -39,7 +39,7 @@ export function dadosDaMissa(x, { acordes = true } = {}) {
 }
 
 export function exportarMissa(x) {
-  const n = x.itens.filter(it => it.chave && musica(it.chave)).length;
+  const n = x.itens.filter(it => it.chave && musica(it.chave) && it.modo !== 'rezada').length;
   if (!n) { aviso('Escolha pelo menos um canto antes de exportar'); return; }
   const { el, fechar } = modal(`
     <h2 style="margin-top:0">Exportar “${esc(x.titulo)}” em PDF</h2>

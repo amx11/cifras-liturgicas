@@ -2,7 +2,7 @@
 import { estado, musica, versoes, salvarMissas } from './dados.js';
 import { esc, aviso, modal, salvarPrefsFonte } from './ui.js';
 import { painelCifra } from './app.js';
-import { listaVersoes, personalizarItem } from './missas.js';
+import { listaVersoes, personalizarItem, rezada } from './missas.js';
 
 let travaTela = null;
 let teclas = null;
@@ -22,7 +22,7 @@ export function telaTocar(tela, id, pos) {
   sairTocar();
   const x = estado.missas.find(y => y.id === id);
   if (!x) { tela.innerHTML = '<p class="vazio">Missa não encontrada.</p>'; return; }
-  const lista = x.itens.filter(it => it.chave && musica(it.chave));
+  const lista = x.itens.filter(it => it.chave && musica(it.chave) && !rezada(it));   // parte rezada: sem canto
   if (!lista.length) {
     tela.innerHTML = `<p class="vazio">Esta missa ainda não tem cantos escolhidos.</p><p class="vazio"><a class="btn primario" href="#/missa/${esc(id)}">Montar a missa</a></p>`;
     return;
