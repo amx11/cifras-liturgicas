@@ -54,12 +54,12 @@
 :root[data-tema="ceu"] {
   --fundo: #eef6fd; --cartao: #ffffff; --texto: #12324f; --suave: #557089; --linha: #d3e4f3;
   --primaria: #2468b0; --primaria-texto: #ffffff; --acorde: #b4510c; --refrao: #c0264b; --realce: #fff4d1; --perigo: #b3261e;
-  --topo: linear-gradient(120deg, #1f5fa8 0%, #3a86d4 48%, #6db4ee 100%);
+  --topo: linear-gradient(120deg, #1d5aa0 0%, #2468b0 50%, #2b74bf 100%);
   --sombra: 0 1px 2px rgba(18, 50, 79, .05), 0 3px 12px rgba(36, 104, 176, .07);
   --sombra-alta: 0 6px 16px rgba(36, 104, 176, .12), 0 14px 34px rgba(36, 104, 176, .12);
   --vidro: rgba(238, 246, 253, .82); --vidro-cartao: rgba(255, 255, 255, .88);
   --primaria-suave: rgba(36, 104, 176, .12); --anel: rgba(58, 134, 212, .35);
-  --fab: linear-gradient(135deg, #2468b0 0%, #3f8fdb 100%);
+  --fab: linear-gradient(135deg, #2468b0 0%, #2b74bf 100%);
   color-scheme: light;
 }
 
@@ -242,13 +242,7 @@ body.modo-tocar .controles { top: 52px; }
 .tocar-rodape .btn { min-height: 52px; font-size: 17px; white-space: normal; text-align: center; }
 
 /* Painel da missa (à esquerda) */
-.painel-missa, .fab-missa, .painel-fundo { display: none; }
-body.com-painel .fab-missa { display: inline-flex; }
-.fab-missa {
-  position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 15; gap: 6px; align-items: center;
-  padding: 12px 18px; border-radius: 99px; border: 0; background: var(--primaria); color: var(--primaria-texto);
-  font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer;
-}
+.painel-missa, .painel-fundo { display: none; }
 body.com-painel.painel-aberto .painel-missa {
   display: block; position: fixed; top: 0; bottom: 0; left: 0; z-index: 25; width: min(92vw, 360px);
   overflow-y: auto; background: var(--fundo); padding: 14px 14px 90px; box-shadow: 4px 0 20px rgba(0,0,0,.25);
@@ -260,7 +254,7 @@ body.com-painel.painel-aberto .painel-fundo { display: block; position: fixed; i
     display: block; position: sticky; top: 46px; align-self: start; height: calc(100vh - 46px - 64px); overflow-y: auto;
     width: auto; z-index: 1; box-shadow: none; padding: 16px 12px 16px 16px; border-right: 1px solid var(--linha); background: var(--fundo);
   }
-  body.com-painel .fab-missa, body.com-painel .painel-fundo, .pn-fechar { display: none !important; }
+  body.com-painel .topo-missa, body.com-painel .painel-fundo, .pn-fechar { display: none !important; }
   body.com-painel main { margin: 0; max-width: 900px; }
 }
 .pn-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
@@ -428,7 +422,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   transition: background-color .15s; }
 .abas a.ativa .ico { background: var(--primaria-suave); }
 
-.fab-missa { background: var(--fab); box-shadow: 0 6px 18px var(--anel), 0 2px 6px rgba(0, 0, 0, .15); }
 .add-missa { border-radius: 12px; transition: background-color .15s, color .15s; }
 .montando { border: 1px solid rgba(201, 154, 46, .28); }
 .modal { box-shadow: var(--sombra-alta); }
@@ -470,7 +463,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .cartao, .item { box-shadow: none !important; }
 }
 main:focus-visible { outline: none; }
-.marca-icone { width: 28px; height: 28px; flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .25)); }
+.marca-icone { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .25)); }
 .marca-fundo { fill: rgba(255, 255, 255, .16); stroke: rgba(255, 255, 255, .35); stroke-width: 2; }
 .chips, .tons { scrollbar-width: thin; scrollbar-color: var(--linha) transparent; }
 .chips::-webkit-scrollbar, .tons::-webkit-scrollbar { height: 4px; }
@@ -478,3 +471,71 @@ main:focus-visible { outline: none; }
 html { accent-color: var(--primaria); }
 .topo { color: var(--topo-texto, var(--primaria-texto)); }
 .pn-nome { max-width: 100%; }
+
+/* ---------- Topo: marca, título da música, busca e missa ---------- */
+.topo { min-height: 50px; padding: 8px 12px 8px 16px; gap: 8px; }
+.marca { margin-right: auto; min-width: 0; }
+.marca-texto { display: grid; min-width: 0; }
+.marca-app, .marca-titulo { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity .2s, transform .2s; }
+.marca-titulo { opacity: 0; transform: translateY(6px); font-size: 16px; }
+.topo.com-titulo .marca-app { opacity: 0; transform: translateY(-6px); }
+.topo.com-titulo .marca-titulo { opacity: 1; transform: none; }
+.status-rede { margin-left: 0; }
+.topo-btn, .topo-missa {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; min-width: 34px;
+  border: 1px solid rgba(255, 255, 255, .28); border-radius: 99px; background: rgba(0, 0, 0, .16); color: inherit; cursor: pointer;
+  transition: background-color .15s;
+}
+.topo-btn:hover, .topo-missa:hover { background: rgba(0, 0, 0, .26); }
+.topo-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.topo-missa { padding: 0 12px; font-size: 14px; font-weight: 600; max-width: 46vw; }
+.topo-missa .tm-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.topo-missa b { flex: none; padding: 1px 7px; border-radius: 99px; background: rgba(255, 255, 255, .22); font-size: 12px; }
+.topo-btn::after, .topo-missa::after { content: ""; position: absolute; inset: -6px -2px; }
+.topo-btn, .topo-missa { position: relative; }
+.letra-grupo, .controles { top: 50px; }
+@media (min-width: 1000px) { body.com-painel .painel-missa, body.com-painel.painel-aberto .painel-missa { top: 50px; height: calc(100vh - 50px - 64px); } }
+
+/* ícones das abas (SVG de traço único, seguem a cor da aba) */
+.abas a .ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Barra da cifra: principal, tamanho, acordes, rolar e menu Mais ---------- */
+.barra-cifra { gap: 8px; }
+.segmento { display: inline-flex; align-items: stretch; border: 1px solid var(--linha); border-radius: 10px; background: var(--cartao); overflow: hidden; }
+.segmento .btn { border: 0; border-radius: 0; min-width: 44px; padding: 8px 10px; background: transparent; }
+.segmento .btn:hover { background: var(--primaria-suave); }
+.seg-valor { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; font-size: 13px; color: var(--suave);
+  font-variant-numeric: tabular-nums; border-left: 1px solid var(--linha); border-right: 1px solid var(--linha); padding: 0 4px; }
+.barra-cifra .btn[aria-pressed=true] { background: var(--primaria-suave); border-color: var(--primaria); color: var(--primaria); }
+.menu-mais { position: relative; }
+.menu-mais > summary { list-style: none; }
+.menu-mais > summary::-webkit-details-marker { display: none; }
+.menu-mais[open] > summary { border-color: var(--primaria); background: var(--primaria-suave); }
+.menu-mais .menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 15; min-width: 230px; padding: 6px;
+  background: var(--cartao); border: 1px solid var(--linha); border-radius: 12px; box-shadow: var(--sombra-alta);
+  display: flex; flex-direction: column;
+}
+.menu-item {
+  display: flex; align-items: center; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px; background: none;
+  text-align: left; text-decoration: none; color: var(--texto); cursor: pointer; font-size: 15px;
+}
+.menu-item:hover, .menu-item:focus-visible { background: var(--primaria-suave); outline: none; }
+@media (max-width: 520px) { .menu-mais .menu { position: fixed; left: 12px; right: 12px; top: auto; bottom: calc(72px + env(safe-area-inset-bottom)); min-width: 0; } }
+
+/* ---------- Toque: alvos de pelo menos 44 px em tela de toque ---------- */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn.peq { min-height: 40px; }
+  .tons button { min-height: 44px; min-width: 44px; }
+  .pn-acoes .btn.peq { position: relative; }
+  .pn-acoes .btn.peq::after { content: ""; position: absolute; inset: -8px -3px; }
+}
+
+/* faixa de tons presa no alto: só os 12 tons + meio tom; instrumentos rolam com a página */
+.controles { margin-bottom: 6px; }
+.tons-semi { display: inline-flex; gap: 4px; flex: none; padding-left: 6px; margin-left: 2px; border-left: 1px solid var(--linha); }
+.tons-semi button { font-weight: 600; color: var(--suave); }
+.controles-extra { margin: 0 0 10px; }
+.tons-semi { position: sticky; right: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0), var(--fundo) 8px); padding-left: 10px; border-left: 0; }
+.tons-semi button { box-shadow: var(--sombra); }

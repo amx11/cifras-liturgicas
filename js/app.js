@@ -32,6 +32,19 @@ export function aplicarPrefs() {
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => aplicarPrefs());
 
+// ---------- Topo: título da tela quando o título da página sai de vista ----------
+let observaTitulo = null;
+export function tituloNoTopo(h1, texto) {
+  observaTitulo?.disconnect(); observaTitulo = null;
+  const topo = document.querySelector('.topo');
+  document.getElementById('topo-titulo').textContent = texto || '';
+  topo.classList.remove('com-titulo');
+  if (!h1 || !texto || !('IntersectionObserver' in window)) return;
+  observaTitulo = new IntersectionObserver(([e]) => topo.classList.toggle('com-titulo', !e.isIntersecting && e.boundingClientRect.top < 0),
+    { rootMargin: `-${topo.offsetHeight}px 0px 0px 0px` });
+  observaTitulo.observe(h1);
+}
+
 // ---------- Painel de cifra (usado na tela da música e na missa) ----------
 // tomAlvo: tom desejado; aoMudarTom(novoTom) é chamado quando o usuário troca
 export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
@@ -50,14 +63,13 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
     }).join('') : '';
     wrap.innerHTML = `
       ${m.chordpro && original ? `<div class="controles nao-imprimir"${compacto ? ' style="position:static"' : ''}>
-        <div class="tons" role="group" aria-label="Escolher tom">${botoesTom}</div>
-        <div class="barra" style="margin:0">
-          <button class="btn peq" data-semi="-1" title="Meio tom abaixo">−½</button>
-          <button class="btn peq" data-semi="1" title="Meio tom acima">+½</button>
+        <div class="tons" role="group" aria-label="Escolher tom">${botoesTom}<span class="tons-semi"><button type="button" data-semi="-1" title="Meio tom abaixo" aria-label="Meio tom abaixo">−½</button><button type="button" data-semi="1" title="Meio tom acima" aria-label="Meio tom acima">+½</button></span></div>
+        </div>` : ''}
+      ${m.chordpro && original ? `<div class="barra controles-extra nao-imprimir">
           <span class="instrumentos" role="group" aria-label="Ver os acordes no instrumento"><span class="pequeno suave">Acordes no:</span>${INSTRUMENTOS.map(([k, v]) => `<button type="button" class="btn peq${estado.prefs.instrumento === k ? ' primario' : ''}" data-instrumento="${k}" aria-pressed="${estado.prefs.instrumento === k}">${v}</button>`).join('')}${estado.prefs.instrumento ? '<button type="button" class="btn peq" data-instrumento="" title="Ocultar os desenhos dos acordes">✕ Ocultar</button>' : ''}</span>
           ${estado.prefs.instrumento ? `<span class="instrumentos niveis" role="group" aria-label="Nível">${NIVEIS.map(([k, v]) => `<button type="button" class="btn peq${(estado.prefs.nivel || 'medio') === k ? ' primario' : ''}" data-nivel="${k}" aria-pressed="${(estado.prefs.nivel || 'medio') === k}">${v}</button>`).join('')}</span>` : ''}
           <span class="pequeno suave">Original: <b>${esc(original)}</b>${m.outrosTons?.length ? ` (o PDF da arquidiocese traz também em ${m.outrosTons.map(esc).join(', ')})` : ''}${alvo !== original ? ` · ${capo(alvo)}` : ''}</span>
-        </div></div>` : ''}
+        </div>` : ''}
       ${m.chordpro && original && estado.prefs.instrumento ? `<div class="diagramas nao-imprimir" aria-label="Acordes da música no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}"><div class="barra" style="justify-content:space-between;margin:0 0 4px"><b class="pequeno">Acordes no ${esc(INSTRUMENTOS.find(([k]) => k === estado.prefs.instrumento)?.[1] || '')}</b><button type="button" class="btn peq" data-instrumento="">✕ Ocultar desenhos</button></div>${diagramas(acordesDaMusica(m.chordpro, semi, bemol), estado.prefs.instrumento)}</div>` : ''}
       ${m.museScore && !m.daPartitura?.formato?.startsWith('musescore') ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com o arquivo MuseScore da arquidiocese (acorde e sílaba nota a nota)${m.museScore.movidos ? ` — ${m.museScore.movidos} ${m.museScore.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'}` : ''}${m.museScore.estrofes ? ` — acordes de ${m.museScore.estrofes} ${m.museScore.estrofes === 1 ? 'estrofe completados' : 'estrofes completados'}` : ''}.</p>` : ''}
       ${m.conferida && !m.daPartitura && !m.museScore ? `<p class="pequeno suave nao-imprimir" style="margin:4px 0">✓ Acordes conferidos com a partitura${m.conferida.movidos ? ` (${m.conferida.movidos} ${m.conferida.movidos === 1 ? 'acorde corrigido' : 'acordes corrigidos'} para a sílaba da nota)` : ''}.</p>` : ''}
@@ -77,6 +89,14 @@ export function painelCifra(m, { tomAlvo, aoMudarTom, compacto = false } = {}) {
         : `<p class="vazio">Esta música não tem cifra nem letra no acervo.${m.partitura ? ' Veja a partitura.' : ''}</p>`}`;
     const esc_ = wrap.querySelector('.escaneada');
     if (esc_) requestAnimationFrame(() => desenharPDF(m.pdfImagem, esc_));
+    // tom escolhido sempre à vista na faixa de tons (o meio tom fica preso à direita)
+    requestAnimationFrame(() => {
+      const faixa = wrap.querySelector('.tons'), atual = faixa?.querySelector('.atual');
+      if (!atual || faixa.scrollWidth <= faixa.clientWidth) return;
+      const semi = faixa.querySelector('.tons-semi')?.offsetWidth || 0;
+      const fr = faixa.getBoundingClientRect(), ar = atual.getBoundingClientRect();
+      faixa.scrollLeft += (ar.left + ar.width / 2) - (fr.left + (fr.width - semi) / 2);
+    });
   };
   wrap.addEventListener('click', e => {
     // tocar no nome do acorde na cifra: mostra o desenho dele (no instrumento escolhido; sem escolha, no violão)
@@ -266,18 +286,26 @@ function telaMusica(chave) {
         <div class="pequeno suave">${esc((m.tempos || []).map(nomeTempo).join(' · '))}${partes ? ' — ' + esc(partes) : ''}</div></div>
     </div>
     ${barraVersoes(m)}
-    <div class="barra nao-imprimir">
+    <div class="barra barra-cifra nao-imprimir">
       <button class="btn primario" id="add-missa">✚ Pôr na missa</button>
-      <button class="btn" id="fonte-menos" title="Diminuir letra">A−</button>
-      <button class="btn" id="fonte-mais" title="Aumentar letra">A+</button>
-      <button class="btn" id="acordes">${estado.prefs.mostrarAcordes ? 'Ocultar acordes' : 'Mostrar acordes'}</button>
+      <span class="segmento" role="group" aria-label="Tamanho da letra">
+        <button class="btn" id="fonte-menos" aria-label="Diminuir letra" title="Diminuir letra">A−</button>
+        <span class="seg-valor" id="fonte-valor" aria-live="polite">${estado.prefs.fonte}</span>
+        <button class="btn" id="fonte-mais" aria-label="Aumentar letra" title="Aumentar letra">A+</button>
+      </span>
+      <button class="btn" id="acordes" aria-pressed="${!estado.prefs.mostrarAcordes}">${estado.prefs.mostrarAcordes ? 'Ocultar acordes' : 'Mostrar acordes'}</button>
       <button class="btn" id="rolar">▶ Rolar</button>
-      <button class="btn" id="copiar">Copiar</button>
-      <button class="btn" id="editar" title="${m.origem === 'minha' ? 'Editar esta música' : 'Alterar a cifra ou a letra; fica salva como versão personalizada e o original não muda'}">✎ ${m.origem === 'minha' ? 'Editar' : 'Personalizar'}</button>
-      ${m.pdf ? `<a class="btn" href="${esc(m.pdf)}" target="_blank" rel="noopener">PDF</a>` : ''}
-      ${m.partituraLocal ? '<button class="btn" id="ver-partitura">🎼 Partitura</button>' : m.partitura ? `<a class="btn" href="${esc(m.partitura)}" target="_blank" rel="noopener">Partitura ↗</a>` : ''}
-      ${m.youtube ? `<button class="btn" id="yt">YouTube</button>` : ''}
-      ${(m.audios || (m.audio ? [m.audio] : [])).map((u, i, l) => `<button class="btn" data-audio="${esc(u)}">Ouvir${l.length > 1 ? ' ' + (i + 1) : ''}</button><a class="btn" href="${esc(u)}" target="_blank" rel="noopener" title="${m.audioQuebrado ? 'O arquivo está com erro no site da arquidiocese' : 'Abrir o áudio'}">↗${m.audioQuebrado ? ' (erro no site)' : ''}</a>`).join('')}
+      <details class="menu-mais">
+        <summary class="btn" aria-label="Mais opções">⋯ Mais</summary>
+        <div class="menu">
+          <button type="button" class="menu-item" id="copiar">Copiar a cifra</button>
+          <button type="button" class="menu-item" id="editar" title="${m.origem === 'minha' ? 'Editar esta música' : 'Alterar a cifra ou a letra; fica salva como versão personalizada e o original não muda'}">✎ ${m.origem === 'minha' ? 'Editar' : 'Personalizar'}</button>
+          ${m.pdf ? `<a class="menu-item" href="${esc(m.pdf)}" target="_blank" rel="noopener">PDF da arquidiocese ↗</a>` : ''}
+          ${m.partituraLocal ? '<button type="button" class="menu-item" id="ver-partitura">Partitura</button>' : m.partitura ? `<a class="menu-item" href="${esc(m.partitura)}" target="_blank" rel="noopener">Partitura no site ↗</a>` : ''}
+          ${m.youtube ? `<button type="button" class="menu-item" id="yt">Vídeo do YouTube</button>` : ''}
+          ${(m.audios || (m.audio ? [m.audio] : [])).map((u, i, l) => `<button type="button" class="menu-item" data-audio="${esc(u)}">Ouvir o áudio${l.length > 1 ? ' ' + (i + 1) : ''}</button><a class="menu-item" href="${esc(u)}" target="_blank" rel="noopener">Abrir o áudio${l.length > 1 ? ' ' + (i + 1) : ''} ↗${m.audioQuebrado ? ' (erro no site da arquidiocese)' : ''}</a>`).join('')}
+        </div>
+      </details>
     </div>
     <div id="midia"></div>
     <div id="partitura-box" class="cartao nao-imprimir" hidden><div class="barra" style="justify-content:space-between;margin:0 0 8px"><b>Partitura</b>
@@ -320,14 +348,18 @@ function telaMusica(chave) {
     const ativa = missaAtiva();
     if (ativa) adicionarComAviso(ativa, m, painel.tom()); else escolherMissaPara(m, painel.tom());
   };
-  tela.querySelector('#fonte-menos').onclick = () => { estado.prefs.fonte = Math.max(11, estado.prefs.fonte - 1); salvarPrefs(); aplicarPrefs(); };
-  tela.querySelector('#fonte-mais').onclick = () => { estado.prefs.fonte = Math.min(40, estado.prefs.fonte + 1); salvarPrefs(); aplicarPrefs(); };
+  const mudarFonte = d => { estado.prefs.fonte = Math.min(40, Math.max(11, estado.prefs.fonte + d)); salvarPrefs(); aplicarPrefs(); tela.querySelector('#fonte-valor').textContent = estado.prefs.fonte; };
+  tela.querySelector('#fonte-menos').onclick = () => mudarFonte(-1);
+  tela.querySelector('#fonte-mais').onclick = () => mudarFonte(1);
+  const mais = tela.querySelector('.menu-mais');
+  mais.addEventListener('click', e => { if (e.target.closest('.menu-item')) mais.open = false; });
+  tituloNoTopo(tela.querySelector('h1'), `${m.num ? m.num + ' · ' : ''}${m.nome}`);
   tela.querySelector('#acordes').onclick = () => { estado.prefs.mostrarAcordes = !estado.prefs.mostrarAcordes; salvarPrefs(); redesenhar(); };
   const btPart = tela.querySelector('#ver-partitura');
   if (btPart) btPart.onclick = () => {
     const box = tela.querySelector('#partitura-box');
     box.hidden = !box.hidden;
-    btPart.textContent = box.hidden ? '🎼 Partitura' : '🎼 Esconder partitura';
+    btPart.textContent = box.hidden ? 'Partitura' : 'Esconder partitura';
     if (!box.hidden && !tela.querySelector('#partitura-pdf').childElementCount) desenharPDF(m.partituraLocal, tela.querySelector('#partitura-pdf'));
     if (!box.hidden) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -614,6 +646,8 @@ function rotear() {
     document.body.classList.toggle('com-painel', /^#\/(musicas|musica\/|editar\/|nova)/.test(h));
     document.body.classList.remove('larga');
     abrirPainel(false);
+    tituloNoTopo(null);
+    document.querySelectorAll('details.menu-mais[open]').forEach(d => { d.open = false; });
     const mesmaLista = h === '#/musicas' && rotaAnterior.startsWith('#/musica/');
     fn(...m.slice(1));
     if (!mesmaLista) window.scrollTo(0, 0);
@@ -632,6 +666,20 @@ window.addEventListener('missa-mudou', () => {
 });
 window.addEventListener('foco-mudou', () => {
   if ((location.hash || '#/musicas') === '#/musicas') { telaMusicas(); window.scrollTo(0, 0); }
+});
+
+// lupa do topo: vai para Músicas e põe o cursor na busca
+document.getElementById('topo-busca').onclick = () => {
+  const focar = () => { const b = document.getElementById('busca'); if (b) { b.focus(); b.scrollIntoView({ block: 'center' }); } };
+  if ((location.hash || '#/musicas') === '#/musicas') return focar();
+  window.addEventListener('hashchange', () => requestAnimationFrame(focar), { once: true });
+  location.hash = '#/musicas';
+};
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu-mais[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('details.menu-mais[open]').forEach(d => { d.open = false; d.querySelector('summary').focus(); });
 });
 
 function rede() { document.getElementById('status-rede').hidden = navigator.onLine; }

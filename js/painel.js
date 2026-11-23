@@ -66,7 +66,10 @@ function atualizarBotao(x) {
   const b = document.getElementById('fab-missa');
   if (!b) return;
   const feitos = x ? x.itens.filter(it => it.chave && musica(it.chave)).length : 0;
-  b.innerHTML = x ? `✚ Missa <b>${feitos}/${x.itens.length}</b>` : '✚ Missa';
+  // botão da missa fica no topo: nome curto da missa + quantos cantos já estão escolhidos
+  b.innerHTML = x ? `<span aria-hidden="true">✚</span><span class="tm-nome">${esc(x.titulo || 'Missa')}</span><b>${feitos}/${x.itens.length}</b>` : '<span aria-hidden="true">✚</span><span class="tm-nome">Missa</span>';
+  b.title = x ? `Missa em montagem: ${x.titulo || ''} (${feitos} de ${x.itens.length} cantos)` : 'Missa em montagem';
+  b.setAttribute('aria-label', b.title);
 }
 
 export function abrirPainel(abrir = true) {
@@ -107,7 +110,12 @@ export function iniciarPainel() {
   el.addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-pn="foco"]')) { e.preventDefault(); e.target.click(); }
   });
-  document.getElementById('fab-missa').onclick = () => abrirPainel(!document.body.classList.contains('painel-aberto'));
+  // nas telas com o painel (músicas, cifra) abre o painel; nas outras vai para a missa
+  document.getElementById('fab-missa').onclick = () => {
+    if (document.body.classList.contains('com-painel')) return abrirPainel(!document.body.classList.contains('painel-aberto'));
+    const x = missaAtiva();
+    location.hash = x ? `#/missa/${x.id}` : '#/missas';
+  };
   document.getElementById('painel-fundo').onclick = () => abrirPainel(false);
   window.addEventListener('missa-mudou', renderPainel);
   window.addEventListener('foco-mudou', renderPainel);
