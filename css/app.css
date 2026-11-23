@@ -539,3 +539,36 @@ html { accent-color: var(--primaria); }
 .controles-extra { margin: 0 0 10px; }
 .tons-semi { position: sticky; right: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0), var(--fundo) 8px); padding-left: 10px; border-left: 0; }
 .tons-semi button { box-shadow: var(--sombra); }
+
+/* ---------- Gosto (taste): direção "etérea / divina", sóbria para a liturgia ---------- */
+/* títulos em serifa, como num hinário; cifra e letra seguem na fonte sem serifa (legibilidade) */
+:root { --serifa: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Noto Serif", Georgia, serif; }
+h1, h2, .marca-app, .marca-titulo { font-family: var(--serifa); }
+h1 { font-weight: 700; letter-spacing: -.005em; }
+h2 { font-weight: 700; }
+.marca-app { font-size: 19px; font-weight: 700; letter-spacing: .005em; }
+.marca-titulo { font-size: 17px; font-weight: 700; }
+.pn-cab b, .missa-slot .parte, .pn-parte { letter-spacing: .08em; }
+
+/* controle ao lado do título sem peso: aparece como botão só ao passar/focar */
+h1 #renomear { border-color: transparent; background: transparent; box-shadow: none; color: var(--suave);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 500; font-size: 13px; vertical-align: middle; }
+h1 #renomear:hover, h1 #renomear:focus-visible { border-color: var(--linha); background: var(--cartao); color: var(--texto); }
+
+/* Céu: uma única luz quente — o fio dourado sob o topo */
+:root[data-tema="ceu"] .topo { box-shadow: inset 0 -1px 0 rgba(255, 214, 130, .7), 0 2px 14px rgba(18, 50, 79, .18); }
+
+/* Céu: nuvens à deriva, lentas e sem peso (camada própria, só transform: barato para o celular) */
+:root[data-tema="ceu"] body::after {
+  content: ""; position: fixed; top: 0; bottom: 0; left: -20%; right: -20%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(22% 9% at 18% 22%, rgba(255, 255, 255, .75) 0, rgba(255, 255, 255, 0) 70%),
+    radial-gradient(18% 7% at 62% 12%, rgba(255, 255, 255, .6) 0, rgba(255, 255, 255, 0) 70%),
+    radial-gradient(26% 10% at 80% 48%, rgba(255, 255, 255, .55) 0, rgba(255, 255, 255, 0) 70%),
+    radial-gradient(20% 8% at 35% 78%, rgba(255, 255, 255, .5) 0, rgba(255, 255, 255, 0) 70%);
+  animation: nuvens-deriva 90s ease-in-out infinite alternate; will-change: transform;
+}
+@keyframes nuvens-deriva { from { transform: translate3d(-4%, 0, 0); } to { transform: translate3d(4%, -1.5%, 0); } }
+@media (prefers-reduced-motion: reduce) { :root[data-tema="ceu"] body::after { animation: none; } }
+body.modo-tocar::after { animation-play-state: paused; }
+@media print { body::after { display: none !important; } }
