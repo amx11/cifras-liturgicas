@@ -9,6 +9,16 @@ export const CORDAS_VIOLAO = [
   { nome: 'E', oitava: 2, corda: 6 }, { nome: 'A', oitava: 2, corda: 5 }, { nome: 'D', oitava: 3, corda: 4 },
   { nome: 'G', oitava: 3, corda: 3 }, { nome: 'B', oitava: 3, corda: 2 }, { nome: 'E', oitava: 4, corda: 1 },
 ];
+// Instrumentos e afinações (cordas de baixo para cima; `corda` = número da corda, 1 = a mais fina/aguda).
+// Cavaquinho: padrão Ré-Sol-Si-Ré (o mais usado) e natural Ré-Sol-Si-Mi. Violino: Sol-Ré-Lá-Mi (quintas).
+export const INSTRUMENTOS = {
+  violao: { nome: 'Violão', afinacoes: { padrao: { nome: 'Padrão (Mi Lá Ré Sol Si Mi)', cordas: CORDAS_VIOLAO } } },
+  cavaquinho: { nome: 'Cavaquinho', afinacoes: {
+    padrao: { nome: 'Padrão (Ré Sol Si Ré)', cordas: [{ nome: 'D', oitava: 4, corda: 4 }, { nome: 'G', oitava: 4, corda: 3 }, { nome: 'B', oitava: 4, corda: 2 }, { nome: 'D', oitava: 5, corda: 1 }] },
+    natural: { nome: 'Natural (Ré Sol Si Mi)', cordas: [{ nome: 'D', oitava: 4, corda: 4 }, { nome: 'G', oitava: 4, corda: 3 }, { nome: 'B', oitava: 4, corda: 2 }, { nome: 'E', oitava: 5, corda: 1 }] } } },
+  violino: { nome: 'Violino', afinacoes: { padrao: { nome: 'Padrão (Sol Ré Lá Mi)', cordas: [{ nome: 'G', oitava: 3, corda: 4 }, { nome: 'D', oitava: 4, corda: 3 }, { nome: 'A', oitava: 4, corda: 2 }, { nome: 'E', oitava: 5, corda: 1 }] } } },
+};
+export const cordasDoInstrumento = (inst, afin) => { const i = INSTRUMENTOS[inst] || INSTRUMENTOS.violao; return (i.afinacoes[afin] || Object.values(i.afinacoes)[0]).cordas; };
 const NOMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOMES_PT = { C: 'Dó', 'C#': 'Dó#', D: 'Ré', 'D#': 'Ré#', E: 'Mi', F: 'Fá', 'F#': 'Fá#', G: 'Sol', 'G#': 'Sol#', A: 'Lá', 'A#': 'Lá#', B: 'Si' };
 export const nomePt = n => NOMES_PT[n] || n;
@@ -185,8 +195,8 @@ export function filtrarEntrada(x, taxa) {
 // FILTRO DE RUÍDO (ativável): só aceita alturas perto das cordas do violão (±70 cents no Automático; ±150 com uma corda escolhida,
 // para corda nova que chega muito frouxa). Voz, conversa e ventilador raramente caem nessas alturas; escolhida uma corda, só vale aquela.
 // Cromático = sem filtro (qualquer nota). Devolve a função que o leitor usa em `aceitar`.
-export const aceitarCordas = (la = 440, margem = 70) => f => cordaDe(f, la).cents !== undefined && Math.abs(cordaDe(f, la).cents) <= margem;
-export const aceitarCorda = (i, la = 440, margem = 150) => { const c = CORDAS_VIOLAO[i], alvo = freqDoMidi(midiDe(c.nome, c.oitava), la); return f => Math.abs(centsEntre(f, alvo)) <= margem; };
+export const aceitarCordas = (la = 440, margem = 70, cordas = CORDAS_VIOLAO) => f => Math.abs(cordaDe(f, la, cordas).cents) <= margem;
+export const aceitarCorda = (i, la = 440, margem = 150, cordas = CORDAS_VIOLAO) => { const c = cordas[i], alvo = freqDoMidi(midiDe(c.nome, c.oitava), la); return f => Math.abs(centsEntre(f, alvo)) <= margem; };
 
 // volume mínimo = 2× o ruído do ambiente medido sem nota (o teste de sensibilidade não mostra nota errada nesse limiar)
 const FATOR_PISO = 2;

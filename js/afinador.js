@@ -1,8 +1,8 @@
-// Afinador de violão (microfone): nota, frequência e desvio em cents. A leitura (sensibilidade, estabilidade) fica no
+// Afinador de instrumentos de corda (violão, cavaquinho, violino; microfone): nota, frequência e desvio em cents. A leitura (sensibilidade, estabilidade) fica no
 // núcleo (criarLeitor), testado com violão simulado em tools/testes/afinador-sensibilidade.mjs; aqui só a tela.
 import { estado, salvarPrefs } from './dados.js';
 import { aviso } from './ui.js';
-import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe, CORDAS_VIOLAO, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
+import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe, INSTRUMENTOS, cordasDoInstrumento, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
 
 let sessao = null;
 
@@ -18,6 +18,10 @@ export function telaAfinador(tela) {
   const prefs = estado.prefs;
   prefs.afinador ||= { la: 440, modo: 'auto' };
   const cfg = prefs.afinador;
+  if (!INSTRUMENTOS[cfg.instrumento]) { cfg.instrumento = 'violao'; cfg.afinacao = 'padrao'; }
+  if (!INSTRUMENTOS[cfg.instrumento].afinacoes[cfg.afinacao]) cfg.afinacao = Object.keys(INSTRUMENTOS[cfg.instrumento].afinacoes)[0];
+  const cordas = () => cordasDoInstrumento(cfg.instrumento, cfg.afinacao);
+  if (typeof cfg.modo === 'number' && cfg.modo >= cordas().length) cfg.modo = 'auto';
   if (!PRECISOES[cfg.precisao]) cfg.precisao = 'normal';      // como nos afinadores de referência: afinado até ±4 cents
   const tol = () => PRECISOES[cfg.precisao].tol;
   const escalaFina = () => tol() * 2.5;                          // ampliada: ±10 (Normal), ±5 (Exigente), ±2,5 (Máxima)
@@ -29,11 +33,11 @@ export function telaAfinador(tela) {
         <button class="btn primario" id="ligar">🎙 Ligar microfone</button>
         <label class="pequeno">Lá = <input id="la" type="number" min="415" max="466" step="0.1" value="${cfg.la}" style="width:5.5em"> Hz</label>
       </div>
-      <div class="cordas" role="group" aria-label="Corda">
-        <button class="btn peq" data-modo="auto">Automático</button>
-        ${CORDAS_VIOLAO.map((c, i) => `<button class="btn peq" data-modo="${i}" title="${c.corda}ª corda">${c.corda}ª ${c.nome}${c.oitava}</button>`).join('')}
-        <button class="btn peq" data-modo="cromatico" title="Qualquer nota">Cromático</button>
+      <div class="barra" style="margin:4px 0 0">
+        <label class="campo" style="margin:0;flex:1 1 140px"><span>Instrumento</span><select id="instrumento">${Object.entries(INSTRUMENTOS).map(([k, v]) => `<option value="${k}" ${cfg.instrumento === k ? 'selected' : ''}>${v.nome}</option>`).join('')}</select></label>
+        <label class="campo" id="campo-afinacao" style="margin:0;flex:1 1 160px"><span>Afinação</span><select id="afinacao"></select></label>
       </div>
+      <div class="cordas" id="cordas" role="group" aria-label="Corda"></div>
       <label class="campo" style="margin:4px 0 0"><span>Precisão</span><select id="precisao">
         ${Object.entries(PRECISOES).map(([k, p]) => `<option value="${k}" ${cfg.precisao === k ? 'selected' : ''}>${p.nome}</option>`).join('')}</select></label>
       <label class="pequeno" style="display:flex;gap:8px;align-items:center;margin:6px 0 0"><input type="checkbox" id="ruido" ${cfg.filtroRuido ? 'checked' : ''}> Filtro de ruído <span class="suave">(só aceita notas perto das cordas: ignora voz, conversa e ventilador)</span></label>
@@ -56,7 +60,19 @@ export function telaAfinador(tela) {
   // leitor com a velocidade da precisão e, se o filtro de ruído estiver ligado, só aceitando alturas perto das cordas
   // (a corda escolhida, ou qualquer uma das 6 no Automático; no Cromático o filtro não se aplica)
   const novoLeitor = () => criarLeitor({ ...PRECISOES[cfg.precisao].leitor,
-    aceitar: cfg.filtroRuido && cfg.modo !== 'cromatico' ? (typeof cfg.modo === 'number' ? aceitarCorda(cfg.modo, cfg.la) : aceitarCordas(cfg.la)) : null });
+    aceitar: cfg.filtroRuido && cfg.modo !== 'cromatico' ? (typeof cfg.modo === 'number' ? aceitarCorda(cfg.modo, cfg.la, 150, cordas()) : aceitarCordas(cfg.la, 70, cordas())) : null });
+  // botões das cordas e lista de afinações dependem do instrumento escolhido
+  const desenharCordas = () => {
+    $('#cordas').innerHTML = `<button class="btn peq" data-modo="auto">Automático</button>${cordas().map((c, i) => `<button class="btn peq" data-modo="${i}" title="${c.corda}ª corda">${c.corda}ª ${c.nome}${c.oitava}</button>`).join('')}<button class="btn peq" data-modo="cromatico" title="Qualquer nota">Cromático</button>`;
+    const afs = INSTRUMENTOS[cfg.instrumento].afinacoes, ks = Object.keys(afs);
+    $('#afinacao').innerHTML = ks.map(k => `<option value="${k}" ${cfg.afinacao === k ? 'selected' : ''}>${afs[k].nome}</option>`).join('');
+    $('#campo-afinacao').hidden = ks.length < 2;
+    $('#cordas').querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { cfg.modo = b.dataset.modo === 'auto' || b.dataset.modo === 'cromatico' ? b.dataset.modo : +b.dataset.modo; salvarPrefs(); marcarModo(); if (sessao) sessao.leitor = novoLeitor(); });
+    marcarModo();
+  };
+  const trocouInstrumento = () => { cfg.modo = 'auto'; salvarPrefs(); desenharCordas(); marcarPrecisao(); if (sessao) sessao.leitor = novoLeitor(); };
+  $('#instrumento').onchange = e => { cfg.instrumento = e.target.value; cfg.afinacao = Object.keys(INSTRUMENTOS[cfg.instrumento].afinacoes)[0]; trocouInstrumento(); };
+  $('#afinacao').onchange = e => { cfg.afinacao = e.target.value; trocouInstrumento(); };
   const marcarModo = () => tela.querySelectorAll('[data-modo]').forEach(b => b.classList.toggle('primario', String(cfg.modo) === b.dataset.modo));
   // faixa verde (afinado) nas duas escalas e textos que dependem da precisão
   const marcarPrecisao = () => {
@@ -64,10 +80,9 @@ export function telaAfinador(tela) {
     $('#alvo-faixa').style.cssText = `left:${50 - t}%;width:${2 * t}%`;
     $('#alvo-fino').style.cssText = `left:${50 - 50 * t / ef}%;width:${100 * t / ef}%`;
     $('#fino-min').textContent = '−' + String(ef).replace('.', ','); $('#fino-max').textContent = '+' + String(ef).replace('.', ',');
-    $('#dica').textContent = `Afinado = até ${String(t).replace('.', ',')} cent${t > 1 ? 's' : ''} da nota (${PRECISOES[cfg.precisao].nome.split(' ')[0]}). Toque uma corda solta de cada vez, com o aparelho perto do violão, e deixe a nota soar.`;
+    $('#dica').textContent = `Afinado = até ${String(t).replace('.', ',')} cent${t > 1 ? 's' : ''} da nota (${PRECISOES[cfg.precisao].nome.split(' ')[0]}). Toque uma corda solta de cada vez, com o aparelho perto do ${INSTRUMENTOS[cfg.instrumento].nome.toLowerCase()}, e deixe a nota soar.`;
   };
-  marcarModo(); marcarPrecisao();
-  tela.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { cfg.modo = b.dataset.modo === 'auto' || b.dataset.modo === 'cromatico' ? b.dataset.modo : +b.dataset.modo; salvarPrefs(); marcarModo(); if (sessao) sessao.leitor = novoLeitor(); });
+  desenharCordas(); marcarPrecisao();
   $('#la').onchange = e => { const v = +e.target.value; if (v >= 415 && v <= 466) { cfg.la = v; salvarPrefs(); if (sessao) sessao.leitor = novoLeitor(); } else e.target.value = cfg.la; };
   $('#ruido').onchange = e => {
     cfg.filtroRuido = e.target.checked; salvarPrefs();
@@ -102,8 +117,8 @@ export function telaAfinador(tela) {
   function mostrar(f, incerteza = 0.3, completo = true, cedo = false) {
     let alvo, nome, oitava, cents, corda = null;
     if (cfg.modo === 'cromatico') { const n = notaDe(f, cfg.la); ({ alvo, nome, oitava, cents } = n); }
-    else if (cfg.modo === 'auto') { const c = cordaDe(f, cfg.la); corda = c; ({ alvo, nome, oitava, cents } = c); }
-    else { const c = CORDAS_VIOLAO[cfg.modo]; corda = c; nome = c.nome; oitava = c.oitava; alvo = freqDoMidi(midiDe(c.nome, c.oitava), cfg.la); cents = centsEntre(f, alvo); }
+    else if (cfg.modo === 'auto') { const c = cordaDe(f, cfg.la, cordas()); corda = c; ({ alvo, nome, oitava, cents } = c); }
+    else { const c = cordas()[cfg.modo]; corda = c; nome = c.nome; oitava = c.oitava; alvo = freqDoMidi(midiDe(c.nome, c.oitava), cfg.la); cents = centsEntre(f, alvo); }
     // zona morta honesta: desvio dentro da incerteza da própria medição não se distingue de zero → 0. Com histerese.
     const zm = Math.min(0.3, Math.max(0.1, incerteza));
     if (sessao) {
