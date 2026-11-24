@@ -32,7 +32,7 @@ function simular(x, centsDe, opcoes, tol, quadro) {
     let dir = null, c = null;
     let cedo = false;
     if (r.tipo === 'leitura') {
-      c = centsEntre(r.f, alvo);
+      c = centsEntre(r.definida ? r.f : r.vivo, alvo);       // o que a tela mostra: fixo se definido, senão ao vivo
       // "Afinado" e a cor só valem com o valor DEFINIDO (som estabilizado); antes disso só o aviso de lado, quando bem fora
       if (r.definida) dir = Math.abs(c) <= tol ? 'afinado' : c < 0 ? 'aperte' : 'afrouxe';
       else if (opcoes.direcaoCedo) { dir = direcaoCedo(c, tol); cedo = true; }

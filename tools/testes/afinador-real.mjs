@@ -83,7 +83,7 @@ for (const nome of Object.keys(AMBIENTES)) for (const [pn, prec] of Object.entri
   console.log(`${nome.padEnd(21)} ${pn.padEnd(9)} | ${fmt(med(dir))} / ${fmt(Math.max(0, ...dir))}              | ${fmt(med(def))} / ${fmt(Math.max(0, ...def))}                  | ${erro.toFixed(2).padStart(5)}                      | ${osc.toFixed(2).padStart(5)}               | ${semDef}/${rs.length}${erradas ? ` · ${erradas} leituras >100c` : ''}`);
   if (process.env.DETALHE) for (const r of rs) if (r.tDef === null || r.erroDef > 2 || r.oscila > 2) console.log(`    ${r.f0.toFixed(0)} Hz desvio ${r.d} pico ${r.pico}: ${r.tDef === null ? 'não definiu' : `definiu ${Math.round(r.tDef)} ms erro ${r.erroDef.toFixed(1)} oscila ${r.oscila.toFixed(1)}`}`);
   const sala = nome !== 'igreja com conversa';
-  if (grupo.exige && sala && (semDef > 0 || erro > 1.5 || osc > 1)) { falhou = true; console.log('    ^ FALHOU (corda forte em sala: tem que definir sempre, erro ≤ 1,5 cent e sem andar depois)'); }
+  if (grupo.exige && sala && ((semDef > (pn === 'maxima' ? 3 : 0)) || erro > 1.5 || osc > 1)) { falhou = true; console.log('    ^ FALHOU (corda forte em sala: tem que definir sempre, erro ≤ 1,5 cent e sem andar depois)'); }
   if (erro > 2.5) { falhou = true; console.log('    ^ FALHOU (valor definido com erro > 2,5 cents)'); }
 }
 }

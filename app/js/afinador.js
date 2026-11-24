@@ -136,7 +136,8 @@ export function telaAfinador(tela) {
     if (r.tipo === 'mantida') { $('#estab').textContent = r.definida ? 'valor definido (som sumindo)' : 'som fraco: aproxime do violão'; return; }
     if (r.tipo === 'medindo') { mostrar(r.f, 5, false, r.estavelCedo); $('#estab').textContent = 'medindo…'; return; }
     // leitura: só mostra valor e cor quando o som estabilizou (definida); antes disso, cinza e "medindo…"
-    mostrar(r.f, r.desvio, r.definida || r.provisoria, true);
-    $('#estab').textContent = r.definida ? 'definido' : r.provisoria ? 'aproximado (ruído ou corda tremendo)' : 'medindo…';
+    // definido: valor fixo (r.f); senão a leitura ao vivo, que acompanha a tarraxa em tempo real
+    mostrar(r.definida ? r.f : r.vivo, r.desvio, r.definida || (r.provisoria && !r.movendo), true);
+    $('#estab').textContent = r.definida ? 'definido' : r.movendo ? 'acompanhando a tarraxa…' : r.provisoria ? 'aproximado (ruído ou corda tremendo)' : 'medindo…';
   }
 }
