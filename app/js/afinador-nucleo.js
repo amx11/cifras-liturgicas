@@ -317,7 +317,9 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
         if (s.un >= 2) { s.definida = false; s.un = 0; s.cn = 0; }
       } else s.un = 0;
       s.cn = concorda ? (s.cn || 0) + 1 : 0;                  // precisa concordar em quadros seguidos para definir
-      if (!s.definida && s.cn >= confirmar) { s.definida = true; s.fixo = s.suave; }   // definido = congelado até a afinação mudar de verdade
+      // corda grave (< 130 Hz) com som fraco: o rumor pesa mais, então confirma por mais 3 quadros antes de definir
+      const exigeMais = confirmar < 5 && r.freq < 130 && rms < 6 * limiar ? 3 : 0;   // a Máxima (5 quadros) já é rigorosa
+      if (!s.definida && s.cn >= confirmar + exigeMais) { s.definida = true; s.fixo = s.suave; }   // definido = congelado até a afinação mudar de verdade
       return { tipo: 'leitura', rms, f: valor(), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5, definida: s.definida, vivo: s.suaveV == null ? valor() : Math.pow(2, s.suaveV + (tarraxa ? Math.max(-4, Math.min(4, mov * lead)) / 1200 : 0)),
         // nunca fica só em "medindo…": com o som seguindo por mais de 1,2 s sem definir (ruído do microfone, corda
         // tremendo), a leitura atual aparece em cor, marcada como aproximada
