@@ -3,9 +3,10 @@
 // O afinador não pode: mostrar valor errado por muito tempo, saltar de valor, sumir (voltar a "medindo" em branco) nem
 // perder o acompanhamento da tarraxa. Mede o erro da tela contra a corda real depois de cada toque.
 //   node tools/testes/afinador-toque.mjs
-import { criarLeitor, centsEntre, filtrarEntrada, PRECISOES } from '../../app/js/afinador-nucleo.js';
+import { criarLeitor, centsEntre, filtrarEntrada, PRECISOES, aceitarCordas } from '../../app/js/afinador-nucleo.js';
 
 const TAXA = 48000, N = 16384, DUR = 4.6, ALVO = 110;
+const FILTRO = !!process.env.FILTRO;
 let semente = 5; const aleat = () => (semente = (semente * 16807) % 2147483647) / 2147483647;
 const gauss = () => Math.sqrt(-2 * Math.log(aleat() + 1e-12)) * Math.cos(6.283185307 * aleat());
 const TOQUES = [{ t: 0.5, a: 0.06 }, { t: 1.5, a: 0.3 }, { t: 2.6, a: 0.3 }];            // 1º suave (começa a afinar); 2 fortes
@@ -30,7 +31,7 @@ let falhou = false;
 for (const [nomeAmb, amb] of Object.entries(AMB)) {
   const x = sinal(amb);
   for (const [pn, prec] of Object.entries(PRECISOES)) {
-    const L = criarLeitor(prec.leitor); const linha = []; let sumiu = 0, erroPos = [0, 0], tempoErrado = [0, 0], saltoMax = 0, ant = null;
+    const L = criarLeitor({ ...prec.leitor, aceitar: FILTRO ? aceitarCordas() : null }); const linha = []; let sumiu = 0, erroPos = [0, 0], tempoErrado = [0, 0], saltoMax = 0, ant = null;
     for (let ms = 400; ms <= DUR * 1000; ms += prec.quadro) {
       const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue;
       const t = ms / 1000, r = L.processar(x.subarray(fim - N, fim), TAXA, ms);

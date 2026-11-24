@@ -5,9 +5,10 @@
 // Mede quando o valor fica DEFINIDO (som estabilizado), o erro dele, se oscila depois de definido e se algo é
 // definido sem nenhuma corda tocando.
 //   node tools/testes/afinador-real.mjs
-import { criarLeitor, centsEntre, filtrarEntrada, PRECISOES, direcaoCedo } from '../../app/js/afinador-nucleo.js';
+import { criarLeitor, centsEntre, filtrarEntrada, PRECISOES, aceitarCordas, direcaoCedo } from '../../app/js/afinador-nucleo.js';
 
 const TAXA = 48000, N = 16384, DUR = 4.5, T0 = 0.5;
+const FILTRO = !!process.env.FILTRO;                       // FILTRO=1: com o filtro de ruído ligado
 let semente = 21; const aleat = () => (semente = (semente * 16807) % 2147483647) / 2147483647;
 const gauss = () => Math.sqrt(-2 * Math.log(aleat() + 1e-12)) * Math.cos(6.283185307 * aleat());
 const AMBIENTES = {
@@ -45,7 +46,7 @@ function corda(f0, desvio, pico, amb) {
 }
 
 function rodar(prec, sinal, desvio) {
-  const L = criarLeitor(prec.leitor), tol = prec.tol;
+  const L = criarLeitor({ ...prec.leitor, aceitar: FILTRO ? aceitarCordas() : null }), tol = prec.tol;
   let tDir = null, tDef = null, cDef = null, oscila = 0, erradas = 0;
   for (let ms = 400; ms <= DUR * 1000; ms += prec.quadro) {
     const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue;
@@ -91,7 +92,7 @@ for (const nome of Object.keys(AMBIENTES)) for (const [pn, prec] of Object.entri
 // sem corda nenhuma: o ambiente sozinho não pode ser definido como nota
 let fantasmas = 0;
 for (const [nome, amb] of Object.entries(AMBIENTES)) for (const [pn, prec] of Object.entries(PRECISOES)) {
-  const x = filtrarEntrada(ambiente(Math.round(DUR * TAXA), amb), TAXA), L = criarLeitor(prec.leitor); let k = 0;
+  const x = filtrarEntrada(ambiente(Math.round(DUR * TAXA), amb), TAXA), L = criarLeitor({ ...prec.leitor, aceitar: FILTRO ? aceitarCordas() : null }); let k = 0;
   for (let ms = 400; ms <= DUR * 1000; ms += prec.quadro) { const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue; const r = L.processar(x.subarray(fim - N, fim), TAXA, ms); if (r.definida || r.provisoria) k++; }
   if (k) { console.log(`sem corda · ${nome} · ${pn}: ${k} quadros com valor definido`); fantasmas += k; }
 }
