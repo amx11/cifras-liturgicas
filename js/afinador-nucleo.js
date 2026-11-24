@@ -146,9 +146,9 @@ export function refinarFundamental(x, taxa, f0, iteracoes = 2) {
 // leitor: janelaMax (amostras do refinamento), nEstab (leituras na mediana), alfa [tremor, girando a tarraxa],
 // ataqueMs (espera após a palhetada); quadro: ms entre leituras. Medido em tools/testes/afinador-resposta.mjs.
 export const PRECISOES = {
-  normal: { tol: 4, nome: 'Normal (±4 cents)', quadro: 25, leitor: { janelaMax: 6144, nEstab: 3, alfa: [0.6, 0.95], ataqueMs: 60, definirDesv: 1.0, destravar: 2.5, confirmar: 2 } },
-  exigente: { tol: 2, nome: 'Exigente (±2 cents)', quadro: 30, leitor: { janelaMax: 9216, nEstab: 4, alfa: [0.45, 0.9], ataqueMs: 90, definirDesv: 0.7, destravar: 1.6, confirmar: 3 } },
-  maxima: { tol: 1, nome: 'Máxima (±1 cent)', quadro: 35, leitor: { janelaMax: 16384, nEstab: 5, alfa: [0.35, 0.8], ataqueMs: 120, definirDesv: 0.5, destravar: 0.9, confirmar: 5 } },
+  normal: { tol: 4, nome: 'Normal (±4 cents)', quadro: 25, leitor: { janelaMax: 6144, nEstab: 3, alfa: [0.6, 0.95], ataqueMs: 60, definirDesv: 1.0, destravar: 1.2, confirmar: 2 } },
+  exigente: { tol: 2, nome: 'Exigente (±2 cents)', quadro: 30, leitor: { janelaMax: 9216, nEstab: 4, alfa: [0.45, 0.9], ataqueMs: 90, definirDesv: 0.7, destravar: 0.9, confirmar: 3 } },
+  maxima: { tol: 1, nome: 'Máxima (±1 cent)', quadro: 35, leitor: { janelaMax: 16384, nEstab: 5, alfa: [0.35, 0.8], ataqueMs: 120, definirDesv: 0.5, destravar: 0.6, confirmar: 5 } },
 };
 // Para que lado girar já na primeira leitura da palhetada: só quando a corda está claramente fora (o ataque da corda
 // soa ~1-2 cents alto, então a margem é a tolerância + 3 cents); perto da nota espera a leitura completa.
@@ -188,10 +188,11 @@ export const ehZumbido = f => REDE.some(r => Math.abs(centsEntre(f, r)) < 20);
 // enquanto ela soa (até cair a `manter` do pico) — só depois congela a última leitura boa.
 // As opções permitem reproduzir o comportamento antigo nos testes (comparação antes × depois).
 export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05, janelaExtra = true, pisoAdaptativo = true,
-  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120, definirDesv = 1.0, destravar = 2.5, definirMs = 450, confirmar = 2 } = {}) {
+  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120, definirDesv = 1.0, destravar = 1.2, definirMs = 450, confirmar = 2 } = {}) {
   const est = criarEstabilizador(nEstab);
-  const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null, definida: false, fixo: null };
-  const limpar = () => { est.limpar(); s.f = null; s.suave = null; s.pico = 0; s.definida = false; s.fixo = null; s.cn = 0; };
+  const estV = criarEstabilizador(2);          // leitura rápida para a seta (igual em todas as precisões)
+  const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null, definida: false, fixo: null, hv: [] };
+  const limpar = () => { est.limpar(); estV.limpar(); s.suaveV = null; s.hv = []; s.f = null; s.suave = null; s.pico = 0; s.definida = false; s.fixo = null; s.cn = 0; };
   // valor mostrado: depois de definido, o valor fixo (não oscila com o ruído nem com a nota sumindo)
   const valor = () => Math.pow(2, s.definida ? s.fixo : s.suave);
   return {
@@ -219,7 +220,7 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       const nova = !s.f || agora - s.visto > 300 || repalhetada || salto;
       if (!nova && Math.abs(centsEntre(r.freq, s.f)) > 40) return s.suave != null ? { tipo: 'mantida', rms, f: valor(), definida: s.definida } : { tipo: 'silencio', rms };
       s.rmsAnt = rms;
-      if (nova) { est.limpar(); s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; s.definida = false; s.fixo = null; s.cn = 0; }
+      if (nova) { est.limpar(); estV.limpar(); s.suaveV = null; s.hv = []; s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; s.definida = false; s.fixo = null; s.cn = 0; }
       s.pico = Math.max(s.pico, rms);
       // janela que cresce desde a palhetada: ~0,13 s (resposta rápida) até 0,34 s (precisão), sem o som de antes
       const desde = Math.round((agora - s.ataque) / 1000 * taxa);
@@ -229,6 +230,10 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       const util = Math.max(0, desde - Math.round(0.15 * taxa));
       const tam = Math.max(Math.min(6144, teto), Math.min(buf.length, teto, util));
       const f = refinarFundamental(buf.subarray(buf.length - tam), taxa, r.freq);
+      // seta e número ao vivo: janela curta (≤85 ms) e suavização rápida em qualquer precisão, para acompanhar a tarraxa
+      // em tempo real; a janela longa (f) só serve para decidir quando declarar o valor "definido"
+      const tamV = Math.max(Math.min(4096, teto), Math.min(buf.length, 4096, util));
+      const fV = tamV < tam ? refinarFundamental(buf.subarray(buf.length - tamV), taxa, r.freq) : f;
       s.f = f; s.visto = agora;
       // logo após a palhetada a corda soa um pouco mais alta: nos primeiros 0,12 s só mostra a nota
       // aviso antecipado ("Aperte"/"Afrouxe" antes da medição final): só com ≥50 ms de som, leitura bem periódica e duas
@@ -241,26 +246,47 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       if (agora - s.ataque < Math.max(ataqueMs, 12000 / f)) return { tipo: 'medindo', rms, f, estavelCedo };
       // nota quase sumindo: o ruído passa a dominar → mantém a última leitura boa em vez de tremer
       if (rms < manter * s.pico && s.suave != null) return { tipo: 'mantida', rms, f: valor(), definida: s.definida };
-      if (r.clareza >= clarezaMin) est.adicionar(f);         // leitura pouco periódica (ruído, duas cordas) não entra
+      if (r.clareza >= clarezaMin) { est.adicionar(f); estV.adicionar(fV); }         // leitura pouco periódica (ruído, duas cordas) não entra
       const v = est.valor();
       if (!v) return { tipo: 'medindo', rms, f, estavelCedo };
       // suavização adaptativa: tremor anda devagar; girando a tarraxa (>3 cents) o ponteiro acompanha rápido
+      const vV = estV.valor();
+      if (vV) { const lv = Math.log2(vV.freq); s.suaveV = s.suaveV == null ? lv : s.suaveV + (Math.abs(1200 * (lv - s.suaveV)) > 3 ? 0.95 : 0.6) * (lv - s.suaveV); }
       const lg = Math.log2(v.freq);
       if (s.suave == null) s.suave = lg;
       else s.suave += (Math.abs(1200 * (lg - s.suave)) > 3 ? alfa[1] : alfa[0]) * (lg - s.suave);
       // "definida": só quando o som estabiliza (leituras concordando e o ataque já acomodou). Depois de definida o valor
       // fica FIXO — ruído e nota sumindo não mexem nele; só destrava se a afinação mudar de fato (girou a tarraxa).
-      const concorda = v.amostras >= 3 && v.desvioCents < definirDesv && agora - s.ataque >= definirMs;
-      // destrava só se a afinação mudou de verdade: desvio grande por 3 quadros seguidos e a corda ainda forte (com a nota
-      // sumindo o ruído domina e não pode derrubar um valor já definido)
-      s.un = s.definida && Math.abs(1200 * (s.suave - s.fixo)) > destravar && rms >= 0.3 * s.pico ? (s.un || 0) + 1 : 0;
-      if (s.un >= 3) { s.definida = false; s.un = 0; s.cn = 0; }
-      s.cn = concorda ? (s.cn || 0) + 1 : 0;                  // precisa concordar em 2 quadros seguidos para definir
+      // TENDÊNCIA: inclinação (regressão linear) do valor ao vivo nos últimos ~160 ms. Mais de 8 cents/s = a corda está se
+      // movendo (tarraxa girando; girar de verdade dá 15-40 cents/s). A regressão faz o ruído (que balança para os dois
+      // lados) se anular. Enquanto se move não define, e um valor já definido destrava na hora, para a seta acompanhar a
+      // tarraxa em tempo real.
+      if (s.suaveV != null) { s.hv.push([agora, 1200 * s.suaveV]); while (s.hv.length && agora - s.hv[0][0] > 160) s.hv.shift(); }
+      let mov = 0, sig = 0;
+      if (s.hv.length >= 4 && agora - s.hv[0][0] >= 100) {
+        const n = s.hv.length, tm = s.hv.reduce((x, h) => x + h[0], 0) / n, ym = s.hv.reduce((x, h) => x + h[1], 0) / n;
+        let sxy = 0, sxx = 0; for (const [t, y] of s.hv) { sxy += (t - tm) * (y - ym); sxx += (t - tm) * (t - tm); }
+        mov = sxx > 0 ? 1000 * sxy / sxx : 0;                                // cents por segundo
+        // significância: com ruído o valor ao vivo oscila ±1-2 cents e a inclinação "aparece" sozinha; só vale se for
+        // bem maior que o erro padrão dela (tarraxa girando = reta limpa, ruído = nuvem)
+        const res = s.hv.reduce((x, [t, y]) => x + Math.pow(y - ym - (mov / 1000) * (t - tm), 2), 0);
+        sig = n > 4 && sxx > 0 ? Math.abs(mov) / (1000 * Math.sqrt(res / (n - 2) / sxx) + 1e-9) : 0;
+      }
+      const movendo = Math.abs(mov) > 8 && sig > 2.5;
+      const concorda = v.amostras >= 3 && v.desvioCents < definirDesv && agora - s.ataque >= definirMs && !movendo;
+      // destrava se a afinação mudou de verdade: sai do valor definido mais que `destravar`, andando para o mesmo lado, com
+      // a corda ainda forte (com a nota sumindo o ruído domina e não pode derrubar um valor já definido)
+      if (s.definida) {
+        const dev = 1200 * ((s.suaveV ?? s.suave) - s.fixo);
+        s.un = movendo && Math.abs(dev) > destravar && Math.sign(dev) === Math.sign(mov) && rms >= 0.3 * s.pico ? (s.un || 0) + 1 : 0;
+        if (s.un >= 2) { s.definida = false; s.un = 0; s.cn = 0; }
+      } else s.un = 0;
+      s.cn = concorda ? (s.cn || 0) + 1 : 0;                  // precisa concordar em quadros seguidos para definir
       if (!s.definida && s.cn >= confirmar) { s.definida = true; s.fixo = s.suave; }   // definido = congelado até a afinação mudar de verdade
-      return { tipo: 'leitura', rms, f: valor(), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5, definida: s.definida,
+      return { tipo: 'leitura', rms, f: valor(), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5, definida: s.definida, vivo: s.suaveV == null ? valor() : Math.pow(2, s.suaveV),
         // nunca fica só em "medindo…": com o som seguindo por mais de 1,2 s sem definir (ruído do microfone, corda
         // tremendo), a leitura atual aparece em cor, marcada como aproximada
-        provisoria: !s.definida && agora - s.ataque >= 1200 };
+        provisoria: !s.definida && agora - s.ataque >= 1200, movendo };
     },
   };
 }
