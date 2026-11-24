@@ -586,3 +586,12 @@ body.modo-tocar::after { animation-play-state: paused; }
   .missa-slot > .info { flex: 1 1 calc(100% - 56px) !important; }
   .missa-slot > .acoes { flex: 1 1 100%; justify-content: flex-end; }
 }
+
+/* Afinador: faixa verde = afinado (conforme a precisão); amarelo = grave (aperte), vermelho = agudo (afrouxe) */
+.af-escala .af-alvo { position: absolute; top: 30%; bottom: 30%; background: rgba(31, 157, 85, .28); border-radius: 99px; }
+.afinador[data-estado="grave"] .af-nota, .afinador[data-estado="grave"] .af-cents, .afinador[data-estado="grave"] .af-sub { color: #b7791f; }
+.afinador[data-estado="grave"] .af-ponteiro { background: #d69e2e; }
+.afinador[data-estado="agudo"] .af-nota, .afinador[data-estado="agudo"] .af-cents, .afinador[data-estado="agudo"] .af-sub { color: var(--perigo); }
+.afinador[data-estado="agudo"] .af-ponteiro { background: var(--perigo); }
+.afinador[data-estado="perfeito"] .af-sub, .afinador[data-estado="ok"] .af-sub { color: #1f9d55; font-weight: 600; }
+.medidor > div { transition: width .08s linear; }
