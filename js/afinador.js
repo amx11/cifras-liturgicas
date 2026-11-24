@@ -134,9 +134,16 @@ export function telaAfinador(tela) {
     $('#nivel').style.width = Math.max(0, Math.min(100, (20 * Math.log10(r.rms + 1e-9) + 60) * 2)) + '%';
     if (r.tipo === 'silencio') { tela.querySelector('.afinador').dataset.estado = ''; $('#estab').textContent = 'aguardando som'; return; }
     if (r.tipo === 'mantida') { $('#estab').textContent = r.definida ? 'valor definido (som sumindo)' : 'som fraco: aproxime do violão'; return; }
-    if (r.tipo === 'medindo') { mostrar(r.f, 5, false, r.estavelCedo); $('#estab').textContent = 'medindo…'; return; }
+    if (r.tipo === 'medindo') {
+      // toque forte no meio do ajuste: o leitor remede ~150-250 ms; nesse intervalo mantém o último valor ao vivo na tela
+      // (a afinação da corda não mudou com a palhetada) em vez de piscar "… cents"; nos primeiros 160 ms o ataque da palhetada soa
+      // mais agudo (+10 cents) e não deve mover a seta
+      if (sessao.ultVivo && performance.now() - sessao.ultVivo < 1500 && (!r.estavelCedo || r.desde < 160)) { $('#estab').textContent = 'medindo…'; return; }
+      mostrar(r.f, 5, false, r.estavelCedo); $('#estab').textContent = 'medindo…'; return;
+    }
     // leitura: só mostra valor e cor quando o som estabilizou (definida); antes disso, cinza e "medindo…"
     // definido: valor fixo (r.f); senão a leitura ao vivo, que acompanha a tarraxa em tempo real
+    sessao.ultVivo = performance.now();
     mostrar(r.definida ? r.f : r.vivo, r.desvio, r.definida || (r.provisoria && !r.movendo), true);
     $('#estab').textContent = r.definida ? 'definido' : r.movendo ? 'acompanhando a tarraxa…' : r.provisoria ? 'aproximado (ruído ou corda tremendo)' : 'medindo…';
   }
