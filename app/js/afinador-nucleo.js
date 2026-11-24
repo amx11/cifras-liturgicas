@@ -243,12 +243,12 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       s.fAnt = cedoOk ? f : null;
       const estavelCedo = s.cedoN >= 2;
       // leitura final só com ≥12 períodos da nota na janela (corda grave precisa de mais tempo: 82 Hz → ~146 ms)
-      if (agora - s.ataque < Math.max(ataqueMs, 12000 / f)) return { tipo: 'medindo', rms, f, estavelCedo };
+      if (agora - s.ataque < Math.max(ataqueMs, 12000 / f)) return { tipo: 'medindo', rms, f, estavelCedo, desde: agora - s.ataque };
       // nota quase sumindo: o ruído passa a dominar → mantém a última leitura boa em vez de tremer
       if (rms < manter * s.pico && s.suave != null) return { tipo: 'mantida', rms, f: valor(), definida: s.definida };
       if (r.clareza >= clarezaMin) { est.adicionar(f); estV.adicionar(fV); }         // leitura pouco periódica (ruído, duas cordas) não entra
       const v = est.valor();
-      if (!v) return { tipo: 'medindo', rms, f, estavelCedo };
+      if (!v) return { tipo: 'medindo', rms, f, estavelCedo, desde: agora - s.ataque };
       // suavização adaptativa: tremor anda devagar; girando a tarraxa (>3 cents) o ponteiro acompanha rápido
       const vV = estV.valor();
       if (vV) { const lv = Math.log2(vV.freq); s.suaveV = s.suaveV == null ? lv : s.suaveV + (Math.abs(1200 * (lv - s.suaveV)) > 3 ? 0.95 : 0.6) * (lv - s.suaveV); }
