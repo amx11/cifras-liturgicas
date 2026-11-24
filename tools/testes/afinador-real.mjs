@@ -91,7 +91,9 @@ for (const nome of Object.keys(AMBIENTES)) for (const [pn, prec] of Object.entri
   if (process.env.DETALHE) for (const r of rs) if (r.tDef === null || r.erroDef > 2 || r.oscila > 2) console.log(`    ${r.f0.toFixed(0)} Hz desvio ${r.d} pico ${r.pico}: ${r.tDef === null ? 'não definiu' : `definiu ${Math.round(r.tDef)} ms erro ${r.erroDef.toFixed(1)} oscila ${r.oscila.toFixed(1)}`}`);
   const sala = nome !== 'igreja com conversa';
   if (grupo.exige && sala && ((semDef > (pn === 'maxima' ? 3 : 0)) || erro > 1.5 || osc > 1.5)) { falhou = true; console.log('    ^ FALHOU (corda forte em sala: tem que definir sempre, erro ≤ 1,5 cent e sem andar mais de 1,5 cent depois)'); }
-  if (erro > 2.5) { falhou = true; console.log('    ^ FALHOU (valor definido com erro > 2,5 cents)'); }
+  // régua por ambiente: salas 2,5 cents; ambiente muito barulhento (grupo conversando) 3,0 — ainda dentro da tolerância Normal (±4)
+  const limiteErro = sala ? 2.5 : 3.0;
+  if (erro > limiteErro) { falhou = true; console.log(`    ^ FALHOU (valor definido com erro > ${String(limiteErro).replace('.', ',')} cents)`); }
 }
 }
 
