@@ -257,7 +257,10 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       if (s.un >= 3) { s.definida = false; s.un = 0; s.cn = 0; }
       s.cn = concorda ? (s.cn || 0) + 1 : 0;                  // precisa concordar em 2 quadros seguidos para definir
       if (!s.definida && s.cn >= confirmar) { s.definida = true; s.fixo = s.suave; }   // definido = congelado até a afinação mudar de verdade
-      return { tipo: 'leitura', rms, f: valor(), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5, definida: s.definida };
+      return { tipo: 'leitura', rms, f: valor(), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5, definida: s.definida,
+        // nunca fica só em "medindo…": com o som seguindo por mais de 1,2 s sem definir (ruído do microfone, corda
+        // tremendo), a leitura atual aparece em cor, marcada como aproximada
+        provisoria: !s.definida && agora - s.ataque >= 1200 };
     },
   };
 }

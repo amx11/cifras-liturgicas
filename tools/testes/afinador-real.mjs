@@ -92,7 +92,7 @@ for (const nome of Object.keys(AMBIENTES)) for (const [pn, prec] of Object.entri
 let fantasmas = 0;
 for (const [nome, amb] of Object.entries(AMBIENTES)) for (const [pn, prec] of Object.entries(PRECISOES)) {
   const x = filtrarEntrada(ambiente(Math.round(DUR * TAXA), amb), TAXA), L = criarLeitor(prec.leitor); let k = 0;
-  for (let ms = 400; ms <= DUR * 1000; ms += prec.quadro) { const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue; const r = L.processar(x.subarray(fim - N, fim), TAXA, ms); if (r.definida) k++; }
+  for (let ms = 400; ms <= DUR * 1000; ms += prec.quadro) { const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue; const r = L.processar(x.subarray(fim - N, fim), TAXA, ms); if (r.definida || r.provisoria) k++; }
   if (k) { console.log(`sem corda · ${nome} · ${pn}: ${k} quadros com valor definido`); fantasmas += k; }
 }
 console.log(fantasmas ? `FALHOU: ${fantasmas} quadros definidos só com ruído` : 'sem corda: nada foi definido só com o ruído do ambiente');
