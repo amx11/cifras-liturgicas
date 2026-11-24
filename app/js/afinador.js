@@ -104,12 +104,13 @@ export function telaAfinador(tela) {
     $('#nota').textContent = nome; $('#oitava').textContent = oitava;
     const qual = `${nomePt(nome)}${corda ? ` · ${corda.corda}ª corda` : ''}`;
     if (!completo) {
-      // logo após a palhetada: se a corda está claramente fora da nota, já diz para que lado girar (sem esperar a medição final)
+      // ainda não definido (o ataque da palhetada não acomodou): fica em cinza, com "~" no valor, e só diz para que lado
+      // girar quando a corda está claramente fora da nota. A cor e o valor final só aparecem quando o som estabiliza.
       const dir = cedo ? direcaoCedo(cents, tol()) : null;
-      $('#sub').textContent = `${qual} · ${dir === 'aperte' ? 'Aperte' : dir === 'afrouxe' ? 'Afrouxe' : 'medindo…'}`;
-      $('#cents').textContent = dir ? `${fmtCents(cents)} cents` : '… cents';
-      tela.querySelector('.afinador').dataset.estado = dir === 'aperte' ? 'grave' : dir === 'afrouxe' ? 'agudo' : '';
-      if (dir) { const c0 = Math.max(-50, Math.min(50, cents)), ef0 = escalaFina(), cf0 = Math.max(-ef0, Math.min(ef0, cents)); $('#ponteiro').style.left = (50 + c0) + '%'; $('#ponteiro-fino').style.left = (50 + 50 * cf0 / ef0) + '%'; }
+      $('#sub').textContent = `${qual} · ${dir === 'aperte' ? 'Aperte…' : dir === 'afrouxe' ? 'Afrouxe…' : 'medindo…'}`;
+      $('#cents').textContent = cedo ? `~${fmtCents(cents)} cents` : '… cents';
+      tela.querySelector('.afinador').dataset.estado = 'medindo';
+      if (cedo) { const c0 = Math.max(-50, Math.min(50, cents)), ef0 = escalaFina(), cf0 = Math.max(-ef0, Math.min(ef0, cents)); $('#ponteiro').style.left = (50 + c0) + '%'; $('#ponteiro-fino').style.left = (50 + 50 * cf0 / ef0) + '%'; $('#hz').textContent = f.toFixed(2).replace('.', ',') + ' Hz'; $('#alvo').textContent = alvo.toFixed(2).replace('.', ',') + ' Hz'; }
       return;
     }
     const t = tol(), afinada = Math.abs(cents) <= t;
@@ -132,9 +133,10 @@ export function telaAfinador(tela) {
     // nível em escala de decibéis (−60 a −10 dBFS): som baixo também aparece na barra
     $('#nivel').style.width = Math.max(0, Math.min(100, (20 * Math.log10(r.rms + 1e-9) + 60) * 2)) + '%';
     if (r.tipo === 'silencio') { tela.querySelector('.afinador').dataset.estado = ''; $('#estab').textContent = 'aguardando som'; return; }
-    if (r.tipo === 'mantida') { $('#estab').textContent = 'leitura mantida (toque de novo)'; return; }
+    if (r.tipo === 'mantida') { $('#estab').textContent = r.definida ? 'valor definido (som sumindo)' : 'som fraco: aproxime do violão'; return; }
     if (r.tipo === 'medindo') { mostrar(r.f, 5, false, r.estavelCedo); $('#estab').textContent = 'medindo…'; return; }
-    mostrar(r.f, r.desvio);
-    $('#estab').textContent = r.estavel ? `estável (±${r.desvio.toFixed(2).replace('.', ',')} c)` : 'medindo…';
+    // leitura: só mostra valor e cor quando o som estabilizou (definida); antes disso, cinza e "medindo…"
+    mostrar(r.f, r.desvio, r.definida, true);
+    $('#estab').textContent = r.definida ? 'definido' : 'medindo…';
   }
 }

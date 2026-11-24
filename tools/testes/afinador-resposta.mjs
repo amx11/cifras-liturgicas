@@ -31,7 +31,13 @@ function simular(x, centsDe, opcoes, tol, quadro) {
     const alvo = 110;
     let dir = null, c = null;
     let cedo = false;
-    if (r.tipo === 'leitura') { c = centsEntre(r.f, alvo); dir = Math.abs(c) <= tol ? 'afinado' : c < 0 ? 'aperte' : 'afrouxe'; }
+    if (r.tipo === 'leitura') {
+      c = centsEntre(r.f, alvo);
+      // "Afinado" e a cor só valem com o valor DEFINIDO (som estabilizado); antes disso só o aviso de lado, quando bem fora
+      if (r.definida) dir = Math.abs(c) <= tol ? 'afinado' : c < 0 ? 'aperte' : 'afrouxe';
+      else if (opcoes.direcaoCedo) { dir = direcaoCedo(c, tol); cedo = true; }
+      else dir = Math.abs(c) <= tol ? 'afinado' : c < 0 ? 'aperte' : 'afrouxe';
+    }
     else if (r.tipo === 'medindo' && r.estavelCedo && opcoes.direcaoCedo) { c = centsEntre(r.f, alvo); dir = direcaoCedo(c, tol); cedo = true; }
     saida.push({ ms, dir, c, cedo, real: centsDe(ms / 1000) });
   }
