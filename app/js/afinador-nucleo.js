@@ -139,6 +139,95 @@ export function refinarFundamental(x, taxa, f0, iteracoes = 2) {
   return f;
 }
 
+// Precisão (tolerância para "afinado"), como nos afinadores de referência: Normal ±4 cents (a diferença quase não se
+// ouve), Exigente ±2 e Máxima ±1 (regulagem fina, luthier).
+export const PRECISOES = { normal: { tol: 4, nome: 'Normal (±4 cents)' }, exigente: { tol: 2, nome: 'Exigente (±2 cents)' }, maxima: { tol: 1, nome: 'Máxima (±1 cent)' } };
+
+// Filtros na entrada do microfone (o app monta com BiquadFilter; os testes aplicam os mesmos com filtrarEntrada):
+// passa-altas suave em 50 Hz (vento, batida no tampo) e notch estreito em 50 e 60 Hz (zumbido da rede elétrica, que
+// se mistura à corda e atrapalha a leitura). Q do notch 8 = faixa de ~7 Hz: o Mi grave (82 Hz) passa inteiro.
+// No Web Audio o Q do passa-altas é em dB (0,5 dB ≈ 1,06).
+export const FILTROS_ENTRADA = [{ tipo: 'highpass', f: 50, q: 0.5 }, { tipo: 'notch', f: 50, q: 8 }, { tipo: 'notch', f: 60, q: 8 }];
+export function filtrarEntrada(x, taxa) {
+  let y = Float64Array.from(x);
+  for (const { tipo, f, q } of FILTROS_ENTRADA) {
+    const w = 2 * Math.PI * f / taxa, cw = Math.cos(w), Q = tipo === 'highpass' ? Math.pow(10, q / 20) : q, al = Math.sin(w) / (2 * Q);
+    const [b0, b1, b2] = tipo === 'notch' ? [1, -2 * cw, 1] : [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2];
+    const a0 = 1 + al, a1 = -2 * cw, a2 = 1 - al, z = new Float64Array(y.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < y.length; i++) {
+      const v = (b0 * y[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+      x2 = x1; x1 = y[i]; y2 = y1; y1 = v; z[i] = v;
+    }
+    y = z;
+  }
+  return Float32Array.from(y);
+}
+
+// volume mínimo = 2× o ruído do ambiente medido sem nota (o teste de sensibilidade não mostra nota errada nesse limiar)
+const FATOR_PISO = 2;
+// zumbido da rede elétrica (50/60 Hz e o dobro): ±20 cents dessas frequências não é corda — a nota afinada mais perto
+// (Si, 61,7 e 123,5 Hz) fica a ~49 cents. Sem isso, fonte/cabo/lâmpada perto do celular viram "nota" sem corda tocando.
+const REDE = [50, 60, 100, 120];
+export const ehZumbido = f => REDE.some(r => Math.abs(centsEntre(f, r)) < 20);
+
+// Leitor contínuo: recebe a cada quadro o trecho mais recente do microfone (16384 amostras) e decide o que mostrar.
+// Sensibilidade: o volume mínimo acompanha o ruído do ambiente (2× o piso medido quando não há nota), e quando a janela
+// curta não acha a nota, tenta uma janela maior (mais períodos = mais robusta com som fraco). A leitura segue a nota
+// enquanto ela soa (até cair a `manter` do pico) — só depois congela a última leitura boa.
+// As opções permitem reproduzir o comportamento antigo nos testes (comparação antes × depois).
+export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05, janelaExtra = true, pisoAdaptativo = true } = {}) {
+  const est = criarEstabilizador(5);
+  const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null };
+  const limpar = () => { est.limpar(); s.f = null; s.suave = null; s.pico = 0; };
+  return {
+    limpar,
+    get piso() { return s.piso; },
+    processar(buf, taxa, agora) {
+      const curto = buf.subarray(buf.length - 4096);
+      let soma = 0; for (let i = 0; i < curto.length; i++) soma += curto[i] * curto[i];
+      const rms = Math.sqrt(soma / curto.length);
+      const limiar = pisoAdaptativo ? Math.max(rmsMin, FATOR_PISO * (s.piso ?? 0)) : rmsMin;
+      const opc = { fMin: 60, fMax: 1100, rmsMin: 0 };
+      let r = rms >= limiar ? detectarFrequencia(curto, taxa, opc) : null;
+      if (!r && janelaExtra && rms >= limiar) r = detectarFrequencia(buf.subarray(buf.length - 8192), taxa, opc);
+      if (r && ehZumbido(r.freq)) r = null;                  // rede elétrica, não corda (conta como ruído do ambiente)
+      if (!r) {
+        // sem nota: aprende o ruído do ambiente (desce rápido, sobe devagar — uma nota não "ensina" ruído alto)
+        s.piso = s.piso == null ? rms : rms < s.piso ? 0.7 * s.piso + 0.3 * rms : 0.98 * s.piso + 0.02 * rms;
+        if (agora - s.visto > 1500) { limpar(); return { tipo: 'silencio', rms }; }
+        return s.suave != null ? { tipo: 'mantida', rms, f: Math.pow(2, s.suave) } : { tipo: 'silencio', rms };
+      }
+      // nota nova = mudou mais de 40 cents, voltou depois de silêncio ou o volume saltou (nova palhetada)
+      const repalhetada = s.rmsAnt && rms > 2.5 * s.rmsAnt && rms > 0.5 * (s.pico || 0);
+      // salto de afinação só conta com som forte: no fim da nota aparecem leituras soltas (oitava, ruído)
+      const salto = Math.abs(centsEntre(r.freq, s.f || r.freq)) > 40 && rms >= 0.3 * (s.pico || 0);
+      const nova = !s.f || agora - s.visto > 300 || repalhetada || salto;
+      if (!nova && Math.abs(centsEntre(r.freq, s.f)) > 40) return s.suave != null ? { tipo: 'mantida', rms, f: Math.pow(2, s.suave) } : { tipo: 'silencio', rms };
+      s.rmsAnt = rms;
+      if (nova) { est.limpar(); s.ataque = agora; s.pico = 0; s.suave = null; }
+      s.pico = Math.max(s.pico, rms);
+      // janela que cresce desde a palhetada: ~0,13 s (resposta rápida) até 0,34 s (precisão), sem o som de antes
+      const desde = Math.round((agora - s.ataque) / 1000 * taxa);
+      const tam = Math.max(6144, Math.min(buf.length, desde));
+      const f = refinarFundamental(buf.subarray(buf.length - tam), taxa, r.freq);
+      s.f = f; s.visto = agora;
+      // logo após a palhetada a corda soa um pouco mais alta: nos primeiros 0,12 s só mostra a nota
+      if (agora - s.ataque < 120) return { tipo: 'medindo', rms, f };
+      // nota quase sumindo: o ruído passa a dominar → mantém a última leitura boa em vez de tremer
+      if (rms < manter * s.pico && s.suave != null) return { tipo: 'mantida', rms, f: Math.pow(2, s.suave) };
+      if (r.clareza >= clarezaMin) est.adicionar(f);         // leitura pouco periódica (ruído, duas cordas) não entra
+      const v = est.valor();
+      if (!v) return { tipo: 'medindo', rms, f };
+      // suavização adaptativa: tremor anda devagar; girando a tarraxa (>3 cents) o ponteiro acompanha rápido
+      const lg = Math.log2(v.freq);
+      if (s.suave == null) s.suave = lg;
+      else s.suave += (Math.abs(1200 * (lg - s.suave)) > 3 ? 0.8 : 0.35) * (lg - s.suave);
+      return { tipo: 'leitura', rms, f: Math.pow(2, s.suave), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5 };
+    },
+  };
+}
+
 // Suavização das leituras: mediana das últimas N e média das que estão perto dela (descarta transientes do ataque)
 export function criarEstabilizador(n = 7) {
   const hist = [];
