@@ -2,7 +2,7 @@
 // núcleo (criarLeitor), testado com violão simulado em tools/testes/afinador-sensibilidade.mjs; aqui só a tela.
 import { estado, salvarPrefs } from './dados.js';
 import { aviso } from './ui.js';
-import { criarLeitor, direcaoCedo, notaDe, cordaDe, CORDAS_VIOLAO, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
+import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe, CORDAS_VIOLAO, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
 
 let sessao = null;
 
@@ -36,6 +36,7 @@ export function telaAfinador(tela) {
       </div>
       <label class="campo" style="margin:4px 0 0"><span>Precisão</span><select id="precisao">
         ${Object.entries(PRECISOES).map(([k, p]) => `<option value="${k}" ${cfg.precisao === k ? 'selected' : ''}>${p.nome}</option>`).join('')}</select></label>
+      <label class="pequeno" style="display:flex;gap:8px;align-items:center;margin:6px 0 0"><input type="checkbox" id="ruido" ${cfg.filtroRuido ? 'checked' : ''}> Filtro de ruído <span class="suave">(só aceita notas perto das cordas: ignora voz, conversa e ventilador)</span></label>
       <div class="af-nota"><span id="nota">—</span><small id="oitava"></small></div>
       <div class="af-sub" id="sub">Toque uma corda solta perto do aparelho.</div>
       <div class="af-escala" aria-hidden="true">
@@ -52,6 +53,10 @@ export function telaAfinador(tela) {
       <p class="pequeno suave" id="dica"></p>
     </div>`;
   const $ = s => tela.querySelector(s);
+  // leitor com a velocidade da precisão e, se o filtro de ruído estiver ligado, só aceitando alturas perto das cordas
+  // (a corda escolhida, ou qualquer uma das 6 no Automático; no Cromático o filtro não se aplica)
+  const novoLeitor = () => criarLeitor({ ...PRECISOES[cfg.precisao].leitor,
+    aceitar: cfg.filtroRuido && cfg.modo !== 'cromatico' ? (typeof cfg.modo === 'number' ? aceitarCorda(cfg.modo, cfg.la) : aceitarCordas(cfg.la)) : null });
   const marcarModo = () => tela.querySelectorAll('[data-modo]').forEach(b => b.classList.toggle('primario', String(cfg.modo) === b.dataset.modo));
   // faixa verde (afinado) nas duas escalas e textos que dependem da precisão
   const marcarPrecisao = () => {
@@ -62,13 +67,17 @@ export function telaAfinador(tela) {
     $('#dica').textContent = `Afinado = até ${String(t).replace('.', ',')} cent${t > 1 ? 's' : ''} da nota (${PRECISOES[cfg.precisao].nome.split(' ')[0]}). Toque uma corda solta de cada vez, com o aparelho perto do violão, e deixe a nota soar.`;
   };
   marcarModo(); marcarPrecisao();
-  tela.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { cfg.modo = b.dataset.modo === 'auto' || b.dataset.modo === 'cromatico' ? b.dataset.modo : +b.dataset.modo; salvarPrefs(); marcarModo(); sessao?.leitor.limpar(); });
-  $('#la').onchange = e => { const v = +e.target.value; if (v >= 415 && v <= 466) { cfg.la = v; salvarPrefs(); sessao?.leitor.limpar(); } else e.target.value = cfg.la; };
+  tela.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { cfg.modo = b.dataset.modo === 'auto' || b.dataset.modo === 'cromatico' ? b.dataset.modo : +b.dataset.modo; salvarPrefs(); marcarModo(); if (sessao) sessao.leitor = novoLeitor(); });
+  $('#la').onchange = e => { const v = +e.target.value; if (v >= 415 && v <= 466) { cfg.la = v; salvarPrefs(); if (sessao) sessao.leitor = novoLeitor(); } else e.target.value = cfg.la; };
+  $('#ruido').onchange = e => {
+    cfg.filtroRuido = e.target.checked; salvarPrefs();
+    if (sessao) sessao.leitor = novoLeitor();
+  };
   $('#precisao').onchange = e => {
     cfg.precisao = e.target.value; salvarPrefs(); marcarPrecisao();
     if (!sessao) return;
     // muda a velocidade da leitura na hora, sem desligar o microfone
-    sessao.leitor = criarLeitor(PRECISOES[cfg.precisao].leitor); clearInterval(sessao.quadro); sessao.quadro = setInterval(laco, PRECISOES[cfg.precisao].quadro);
+    sessao.leitor = novoLeitor(); clearInterval(sessao.quadro); sessao.quadro = setInterval(laco, PRECISOES[cfg.precisao].quadro);
   };
 
   $('#ligar').onclick = async () => {
@@ -83,7 +92,7 @@ export function telaAfinador(tela) {
       for (const { tipo, f, q } of FILTROS_ENTRADA) { const b = ctx.createBiquadFilter(); b.type = tipo; b.frequency.value = f; b.Q.value = q; no.connect(b); no = b; }
       const an = ctx.createAnalyser(); an.fftSize = 16384; an.smoothingTimeConstant = 0;
       no.connect(an);
-      sessao = { stream, ctx, an, buf: new Float32Array(an.fftSize), leitor: criarLeitor(PRECISOES[cfg.precisao].leitor), travado: false };
+      sessao = { stream, ctx, an, buf: new Float32Array(an.fftSize), leitor: novoLeitor(), travado: false };
       $('#ligar').textContent = '■ Desligar';
       // leitura a cada 35 ms (~28 por segundo) por relógio próprio: não depende da taxa de quadros da tela
       sessao.quadro = setInterval(laco, PRECISOES[cfg.precisao].quadro);

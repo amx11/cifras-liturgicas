@@ -162,8 +162,9 @@ export const FILTROS_ENTRADA = [{ tipo: 'highpass', f: 50, q: 0.5 }, { tipo: 'no
 export function filtrarEntrada(x, taxa) {
   let y = Float64Array.from(x);
   for (const { tipo, f, q } of FILTROS_ENTRADA) {
-    const w = 2 * Math.PI * f / taxa, cw = Math.cos(w), Q = tipo === 'highpass' ? Math.pow(10, q / 20) : q, al = Math.sin(w) / (2 * Q);
-    const [b0, b1, b2] = tipo === 'notch' ? [1, -2 * cw, 1] : [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2];
+    const w = 2 * Math.PI * f / taxa, cw = Math.cos(w), Q = tipo === 'notch' ? q : Math.pow(10, q / 20),   // no Web Audio o Q de passa-altas/baixas é em dB, o do notch é linear
+           al = Math.sin(w) / (2 * Q);
+    const [b0, b1, b2] = tipo === 'notch' ? [1, -2 * cw, 1] : tipo === 'lowpass' ? [(1 - cw) / 2, 1 - cw, (1 - cw) / 2] : [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2];
     const a0 = 1 + al, a1 = -2 * cw, a2 = 1 - al, z = new Float64Array(y.length);
     let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
     for (let i = 0; i < y.length; i++) {
@@ -174,6 +175,12 @@ export function filtrarEntrada(x, taxa) {
   }
   return Float32Array.from(y);
 }
+
+// FILTRO DE RUÍDO (ativável): só aceita alturas perto das cordas do violão (±70 cents no Automático; ±150 com uma corda escolhida,
+// para corda nova que chega muito frouxa). Voz, conversa e ventilador raramente caem nessas alturas; escolhida uma corda, só vale aquela.
+// Cromático = sem filtro (qualquer nota). Devolve a função que o leitor usa em `aceitar`.
+export const aceitarCordas = (la = 440, margem = 70) => f => cordaDe(f, la).cents !== undefined && Math.abs(cordaDe(f, la).cents) <= margem;
+export const aceitarCorda = (i, la = 440, margem = 150) => { const c = CORDAS_VIOLAO[i], alvo = freqDoMidi(midiDe(c.nome, c.oitava), la); return f => Math.abs(centsEntre(f, alvo)) <= margem; };
 
 // volume mínimo = 2× o ruído do ambiente medido sem nota (o teste de sensibilidade não mostra nota errada nesse limiar)
 const FATOR_PISO = 2;
@@ -188,7 +195,7 @@ export const ehZumbido = f => REDE.some(r => Math.abs(centsEntre(f, r)) < 20);
 // enquanto ela soa (até cair a `manter` do pico) — só depois congela a última leitura boa.
 // As opções permitem reproduzir o comportamento antigo nos testes (comparação antes × depois).
 export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05, janelaExtra = true, pisoAdaptativo = true,
-  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120, definirDesv = 1.0, destravar = 1.2, definirMs = 450, confirmar = 2 } = {}) {
+  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120, definirDesv = 1.0, destravar = 1.2, definirMs = 450, confirmar = 2, aceitar = null } = {}) {
   const est = criarEstabilizador(nEstab);
   const estV = criarEstabilizador(2);          // leitura rápida para a seta (igual em todas as precisões)
   const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null, definida: false, fixo: null, hv: [] };
@@ -207,6 +214,7 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       let r = rms >= limiar ? detectarFrequencia(curto, taxa, opc) : null;
       if (!r && janelaExtra && rms >= limiar) r = detectarFrequencia(buf.subarray(buf.length - 8192), taxa, opc);
       if (r && ehZumbido(r.freq)) r = null;                  // rede elétrica, não corda (conta como ruído do ambiente)
+      if (r && aceitar && !aceitar(r.freq)) r = null;        // filtro de ruído ligado: fora das cordas = ruído (voz, conversa, ventilador)
       if (!r) {
         // sem nota: aprende o ruído do ambiente (desce rápido, sobe devagar — uma nota não "ensina" ruído alto)
         s.piso = s.piso == null ? rms : rms < s.piso ? 0.7 * s.piso + 0.3 * rms : 0.98 * s.piso + 0.02 * rms;
@@ -214,7 +222,14 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
         return s.suave != null ? { tipo: 'mantida', rms, f: valor(), definida: s.definida } : { tipo: 'silencio', rms };
       }
       // nota nova = mudou mais de 40 cents, voltou depois de silêncio ou o volume saltou (nova palhetada)
-      const repalhetada = s.rmsAnt && rms > 2.5 * s.rmsAnt && rms > 0.5 * (s.pico || 0);
+      // toque novo: subida brusca de energia nos últimos 10 ms (480 amostras) contra os 50 ms antes — percebe a palhetada em
+      // 1-2 quadros, antes de o ataque agudo (+10 cents) contaminar a leitura, e não espera a janela de 85 ms encher
+      const nB = buf.length; let e1 = 0, e0 = 0;
+      for (let i = nB - 480; i < nB; i++) e1 += buf[i] * buf[i];
+      for (let i = nB - 2880; i < nB - 480; i++) e0 += buf[i] * buf[i];
+      const r1 = Math.sqrt(e1 / 480), r0 = Math.sqrt(e0 / 2400);
+      const onset = s.f && r1 > 3 * r0 && r1 > 2 * limiar && r1 > 0.5 * (s.pico || 0);
+      const repalhetada = onset || (s.rmsAnt && rms > 2.5 * s.rmsAnt && rms > 0.5 * (s.pico || 0));
       // salto de afinação só conta com som forte: no fim da nota aparecem leituras soltas (oitava, ruído)
       const salto = Math.abs(centsEntre(r.freq, s.f || r.freq)) > 40 && rms >= 0.3 * (s.pico || 0);
       const nova = !s.f || agora - s.visto > 300 || repalhetada || salto;
