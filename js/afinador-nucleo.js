@@ -146,9 +146,9 @@ export function refinarFundamental(x, taxa, f0, iteracoes = 2) {
 // leitor: janelaMax (amostras do refinamento), nEstab (leituras na mediana), alfa [tremor, girando a tarraxa],
 // ataqueMs (espera após a palhetada); quadro: ms entre leituras. Medido em tools/testes/afinador-resposta.mjs.
 export const PRECISOES = {
-  normal: { tol: 4, nome: 'Normal (±4 cents)', quadro: 25, leitor: { janelaMax: 6144, nEstab: 3, alfa: [0.6, 0.95], ataqueMs: 60 } },
-  exigente: { tol: 2, nome: 'Exigente (±2 cents)', quadro: 30, leitor: { janelaMax: 9216, nEstab: 4, alfa: [0.45, 0.9], ataqueMs: 90 } },
-  maxima: { tol: 1, nome: 'Máxima (±1 cent)', quadro: 35, leitor: { janelaMax: 16384, nEstab: 5, alfa: [0.35, 0.8], ataqueMs: 120 } },
+  normal: { tol: 4, nome: 'Normal (±4 cents)', quadro: 25, leitor: { janelaMax: 6144, nEstab: 3, alfa: [0.6, 0.95], ataqueMs: 60, definirDesv: 1.0, destravar: 2.5, confirmar: 2 } },
+  exigente: { tol: 2, nome: 'Exigente (±2 cents)', quadro: 30, leitor: { janelaMax: 9216, nEstab: 4, alfa: [0.45, 0.9], ataqueMs: 90, definirDesv: 0.7, destravar: 1.6, confirmar: 3 } },
+  maxima: { tol: 1, nome: 'Máxima (±1 cent)', quadro: 35, leitor: { janelaMax: 16384, nEstab: 5, alfa: [0.35, 0.8], ataqueMs: 120, definirDesv: 0.5, destravar: 0.9, confirmar: 5 } },
 };
 // Para que lado girar já na primeira leitura da palhetada: só quando a corda está claramente fora (o ataque da corda
 // soa ~1-2 cents alto, então a margem é a tolerância + 3 cents); perto da nota espera a leitura completa.
@@ -188,10 +188,12 @@ export const ehZumbido = f => REDE.some(r => Math.abs(centsEntre(f, r)) < 20);
 // enquanto ela soa (até cair a `manter` do pico) — só depois congela a última leitura boa.
 // As opções permitem reproduzir o comportamento antigo nos testes (comparação antes × depois).
 export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05, janelaExtra = true, pisoAdaptativo = true,
-  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120 } = {}) {
+  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120, definirDesv = 1.0, destravar = 2.5, definirMs = 450, confirmar = 2 } = {}) {
   const est = criarEstabilizador(nEstab);
-  const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null };
-  const limpar = () => { est.limpar(); s.f = null; s.suave = null; s.pico = 0; };
+  const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null, definida: false, fixo: null };
+  const limpar = () => { est.limpar(); s.f = null; s.suave = null; s.pico = 0; s.definida = false; s.fixo = null; s.cn = 0; };
+  // valor mostrado: depois de definido, o valor fixo (não oscila com o ruído nem com a nota sumindo)
+  const valor = () => Math.pow(2, s.definida ? s.fixo : s.suave);
   return {
     limpar,
     get piso() { return s.piso; },
@@ -208,22 +210,24 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
         // sem nota: aprende o ruído do ambiente (desce rápido, sobe devagar — uma nota não "ensina" ruído alto)
         s.piso = s.piso == null ? rms : rms < s.piso ? 0.7 * s.piso + 0.3 * rms : 0.98 * s.piso + 0.02 * rms;
         if (agora - s.visto > 1500) { limpar(); return { tipo: 'silencio', rms }; }
-        return s.suave != null ? { tipo: 'mantida', rms, f: Math.pow(2, s.suave) } : { tipo: 'silencio', rms };
+        return s.suave != null ? { tipo: 'mantida', rms, f: valor(), definida: s.definida } : { tipo: 'silencio', rms };
       }
       // nota nova = mudou mais de 40 cents, voltou depois de silêncio ou o volume saltou (nova palhetada)
       const repalhetada = s.rmsAnt && rms > 2.5 * s.rmsAnt && rms > 0.5 * (s.pico || 0);
       // salto de afinação só conta com som forte: no fim da nota aparecem leituras soltas (oitava, ruído)
       const salto = Math.abs(centsEntre(r.freq, s.f || r.freq)) > 40 && rms >= 0.3 * (s.pico || 0);
       const nova = !s.f || agora - s.visto > 300 || repalhetada || salto;
-      if (!nova && Math.abs(centsEntre(r.freq, s.f)) > 40) return s.suave != null ? { tipo: 'mantida', rms, f: Math.pow(2, s.suave) } : { tipo: 'silencio', rms };
+      if (!nova && Math.abs(centsEntre(r.freq, s.f)) > 40) return s.suave != null ? { tipo: 'mantida', rms, f: valor(), definida: s.definida } : { tipo: 'silencio', rms };
       s.rmsAnt = rms;
-      if (nova) { est.limpar(); s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; }
+      if (nova) { est.limpar(); s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; s.definida = false; s.fixo = null; s.cn = 0; }
       s.pico = Math.max(s.pico, rms);
       // janela que cresce desde a palhetada: ~0,13 s (resposta rápida) até 0,34 s (precisão), sem o som de antes
       const desde = Math.round((agora - s.ataque) / 1000 * taxa);
       // som fraco (perto do limiar): janela inteira, o ruído pesa mais e precisa de mais períodos para não errar os cents
       const teto = rms < 6 * limiar ? buf.length : janelaMax;
-      const tam = Math.max(Math.min(6144, teto), Math.min(buf.length, teto, desde));
+      // a medição ignora os primeiros 150 ms da palhetada (a corda soa mais aguda ao ser tocada e enviesa a média)
+      const util = Math.max(0, desde - Math.round(0.15 * taxa));
+      const tam = Math.max(Math.min(6144, teto), Math.min(buf.length, teto, util));
       const f = refinarFundamental(buf.subarray(buf.length - tam), taxa, r.freq);
       s.f = f; s.visto = agora;
       // logo após a palhetada a corda soa um pouco mais alta: nos primeiros 0,12 s só mostra a nota
@@ -236,7 +240,7 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       // leitura final só com ≥12 períodos da nota na janela (corda grave precisa de mais tempo: 82 Hz → ~146 ms)
       if (agora - s.ataque < Math.max(ataqueMs, 12000 / f)) return { tipo: 'medindo', rms, f, estavelCedo };
       // nota quase sumindo: o ruído passa a dominar → mantém a última leitura boa em vez de tremer
-      if (rms < manter * s.pico && s.suave != null) return { tipo: 'mantida', rms, f: Math.pow(2, s.suave) };
+      if (rms < manter * s.pico && s.suave != null) return { tipo: 'mantida', rms, f: valor(), definida: s.definida };
       if (r.clareza >= clarezaMin) est.adicionar(f);         // leitura pouco periódica (ruído, duas cordas) não entra
       const v = est.valor();
       if (!v) return { tipo: 'medindo', rms, f, estavelCedo };
@@ -244,7 +248,16 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       const lg = Math.log2(v.freq);
       if (s.suave == null) s.suave = lg;
       else s.suave += (Math.abs(1200 * (lg - s.suave)) > 3 ? alfa[1] : alfa[0]) * (lg - s.suave);
-      return { tipo: 'leitura', rms, f: Math.pow(2, s.suave), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5 };
+      // "definida": só quando o som estabiliza (leituras concordando e o ataque já acomodou). Depois de definida o valor
+      // fica FIXO — ruído e nota sumindo não mexem nele; só destrava se a afinação mudar de fato (girou a tarraxa).
+      const concorda = v.amostras >= 3 && v.desvioCents < definirDesv && agora - s.ataque >= definirMs;
+      // destrava só se a afinação mudou de verdade: desvio grande por 3 quadros seguidos e a corda ainda forte (com a nota
+      // sumindo o ruído domina e não pode derrubar um valor já definido)
+      s.un = s.definida && Math.abs(1200 * (s.suave - s.fixo)) > destravar && rms >= 0.3 * s.pico ? (s.un || 0) + 1 : 0;
+      if (s.un >= 3) { s.definida = false; s.un = 0; s.cn = 0; }
+      s.cn = concorda ? (s.cn || 0) + 1 : 0;                  // precisa concordar em 2 quadros seguidos para definir
+      if (!s.definida && s.cn >= confirmar) { s.definida = true; s.fixo = s.suave; }   // definido = congelado até a afinação mudar de verdade
+      return { tipo: 'leitura', rms, f: valor(), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5, definida: s.definida };
     },
   };
 }

@@ -595,3 +595,7 @@ body.modo-tocar::after { animation-play-state: paused; }
 .afinador[data-estado="agudo"] .af-ponteiro { background: var(--perigo); }
 .afinador[data-estado="perfeito"] .af-sub, .afinador[data-estado="ok"] .af-sub { color: #1f9d55; font-weight: 600; }
 .medidor > div { transition: width .08s linear; }
+
+/* afinador ainda medindo (valor não definido): cinza, sem cor de afinado/grave/agudo */
+.afinador[data-estado="medindo"] .af-nota, .afinador[data-estado="medindo"] .af-cents { color: var(--suave); }
+.afinador[data-estado="medindo"] .af-ponteiro { background: var(--suave); }
