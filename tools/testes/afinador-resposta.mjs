@@ -24,7 +24,7 @@ function corda(f0, centsDe, dur, pico = 0.03) {
 }
 
 function simular(x, centsDe, opcoes, tol, quadro) {
-  const L = criarLeitor(opcoes), saida = [];
+  const L = criarLeitor({ ...opcoes, ...(process.env.LEAD ? { lead: +process.env.LEAD } : {}) }), saida = [];
   for (let ms = 400; ms <= x.length / TAXA * 1000; ms += quadro) {
     const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue;
     const r = L.processar(x.subarray(fim - N, fim), TAXA, ms);

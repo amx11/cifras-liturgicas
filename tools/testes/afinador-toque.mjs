@@ -5,7 +5,7 @@
 //   node tools/testes/afinador-toque.mjs
 import { criarLeitor, centsEntre, filtrarEntrada, PRECISOES, aceitarCordas } from '../../app/js/afinador-nucleo.js';
 
-const TAXA = 48000, N = 16384, DUR = 4.6, ALVO = 110;
+const TAXA = 48000, N = 16384, DUR = 4.6, ALVO = +(process.env.FREQ || 110);   // FREQ=82.41|110|146.83|196|246.94|329.63
 const FILTRO = !!process.env.FILTRO;
 let semente = 5; const aleat = () => (semente = (semente * 16807) % 2147483647) / 2147483647;
 const gauss = () => Math.sqrt(-2 * Math.log(aleat() + 1e-12)) * Math.cos(6.283185307 * aleat());
@@ -31,7 +31,7 @@ let falhou = false;
 for (const [nomeAmb, amb] of Object.entries(AMB)) {
   const x = sinal(amb);
   for (const [pn, prec] of Object.entries(PRECISOES)) {
-    const L = criarLeitor({ ...prec.leitor, aceitar: FILTRO ? aceitarCordas() : null }); const linha = []; let sumiu = 0, erroPos = [0, 0], tempoErrado = [0, 0], saltoMax = 0, ant = null;
+    const L = criarLeitor({ ...prec.leitor, aceitar: FILTRO ? aceitarCordas() : null, ...(process.env.LEAD ? { lead: +process.env.LEAD } : {}) }); const linha = []; let sumiu = 0, erroPos = [0, 0], tempoErrado = [0, 0], saltoMax = 0, ant = null;
     for (let ms = 400; ms <= DUR * 1000; ms += prec.quadro) {
       const fim = Math.round(ms / 1000 * TAXA); if (fim < N) continue;
       const t = ms / 1000, r = L.processar(x.subarray(fim - N, fim), TAXA, ms);

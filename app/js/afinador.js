@@ -147,7 +147,11 @@ export function telaAfinador(tela) {
       // toque forte no meio do ajuste: o leitor remede ~150-250 ms; nesse intervalo mantém o último valor ao vivo na tela
       // (a afinação da corda não mudou com a palhetada) em vez de piscar "… cents"; nos primeiros 160 ms o ataque da palhetada soa
       // mais agudo (+10 cents) e não deve mover a seta
-      if (sessao.ultVivo && performance.now() - sessao.ultVivo < 1500 && (!r.estavelCedo || r.desde < 160)) { $('#estab').textContent = 'medindo…'; return; }
+      if (sessao.ultVivo && performance.now() - sessao.ultVivo < 1500 && (!r.estavelCedo || r.desde < 160)) {
+        // se a tarraxa estava girando, continua na mesma velocidade em vez de ficar parado (vivoExtrap, limitado a ±4 cents)
+        if (r.vivoExtrap) mostrar(r.vivoExtrap, 5, false, true);
+        $('#estab').textContent = 'medindo…'; return;
+      }
       mostrar(r.f, 5, false, r.estavelCedo); $('#estab').textContent = 'medindo…'; return;
     }
     // leitura: só mostra valor e cor quando o som estabilizou (definida); antes disso, cinza e "medindo…"
