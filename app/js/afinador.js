@@ -2,7 +2,7 @@
 // núcleo (criarLeitor), testado com violão simulado em tools/testes/afinador-sensibilidade.mjs; aqui só a tela.
 import { estado, salvarPrefs } from './dados.js';
 import { aviso } from './ui.js';
-import { criarLeitor, notaDe, cordaDe, CORDAS_VIOLAO, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
+import { criarLeitor, direcaoCedo, notaDe, cordaDe, CORDAS_VIOLAO, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
 
 let sessao = null;
 
@@ -64,7 +64,12 @@ export function telaAfinador(tela) {
   marcarModo(); marcarPrecisao();
   tela.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { cfg.modo = b.dataset.modo === 'auto' || b.dataset.modo === 'cromatico' ? b.dataset.modo : +b.dataset.modo; salvarPrefs(); marcarModo(); sessao?.leitor.limpar(); });
   $('#la').onchange = e => { const v = +e.target.value; if (v >= 415 && v <= 466) { cfg.la = v; salvarPrefs(); sessao?.leitor.limpar(); } else e.target.value = cfg.la; };
-  $('#precisao').onchange = e => { cfg.precisao = e.target.value; salvarPrefs(); marcarPrecisao(); };
+  $('#precisao').onchange = e => {
+    cfg.precisao = e.target.value; salvarPrefs(); marcarPrecisao();
+    if (!sessao) return;
+    // muda a velocidade da leitura na hora, sem desligar o microfone
+    sessao.leitor = criarLeitor(PRECISOES[cfg.precisao].leitor); clearInterval(sessao.quadro); sessao.quadro = setInterval(laco, PRECISOES[cfg.precisao].quadro);
+  };
 
   $('#ligar').onclick = async () => {
     if (sessao) { pararAfinador(); $('#ligar').textContent = '🎙 Ligar microfone'; return; }
@@ -78,14 +83,14 @@ export function telaAfinador(tela) {
       for (const { tipo, f, q } of FILTROS_ENTRADA) { const b = ctx.createBiquadFilter(); b.type = tipo; b.frequency.value = f; b.Q.value = q; no.connect(b); no = b; }
       const an = ctx.createAnalyser(); an.fftSize = 16384; an.smoothingTimeConstant = 0;
       no.connect(an);
-      sessao = { stream, ctx, an, buf: new Float32Array(an.fftSize), leitor: criarLeitor(), travado: false };
+      sessao = { stream, ctx, an, buf: new Float32Array(an.fftSize), leitor: criarLeitor(PRECISOES[cfg.precisao].leitor), travado: false };
       $('#ligar').textContent = '■ Desligar';
       // leitura a cada 35 ms (~28 por segundo) por relógio próprio: não depende da taxa de quadros da tela
-      sessao.quadro = setInterval(laco, 35);
+      sessao.quadro = setInterval(laco, PRECISOES[cfg.precisao].quadro);
     } catch (e) { aviso('Não foi possível usar o microfone: ' + e.message); }
   };
 
-  function mostrar(f, incerteza = 0.3, completo = true) {
+  function mostrar(f, incerteza = 0.3, completo = true, cedo = false) {
     let alvo, nome, oitava, cents, corda = null;
     if (cfg.modo === 'cromatico') { const n = notaDe(f, cfg.la); ({ alvo, nome, oitava, cents } = n); }
     else if (cfg.modo === 'auto') { const c = cordaDe(f, cfg.la); corda = c; ({ alvo, nome, oitava, cents } = c); }
@@ -98,7 +103,15 @@ export function telaAfinador(tela) {
     }
     $('#nota').textContent = nome; $('#oitava').textContent = oitava;
     const qual = `${nomePt(nome)}${corda ? ` · ${corda.corda}ª corda` : ''}`;
-    if (!completo) { $('#sub').textContent = `${qual} · medindo…`; $('#cents').textContent = '… cents'; return; }
+    if (!completo) {
+      // logo após a palhetada: se a corda está claramente fora da nota, já diz para que lado girar (sem esperar a medição final)
+      const dir = cedo ? direcaoCedo(cents, tol()) : null;
+      $('#sub').textContent = `${qual} · ${dir === 'aperte' ? 'Aperte' : dir === 'afrouxe' ? 'Afrouxe' : 'medindo…'}`;
+      $('#cents').textContent = dir ? `${fmtCents(cents)} cents` : '… cents';
+      tela.querySelector('.afinador').dataset.estado = dir === 'aperte' ? 'grave' : dir === 'afrouxe' ? 'agudo' : '';
+      if (dir) { const c0 = Math.max(-50, Math.min(50, cents)), ef0 = escalaFina(), cf0 = Math.max(-ef0, Math.min(ef0, cents)); $('#ponteiro').style.left = (50 + c0) + '%'; $('#ponteiro-fino').style.left = (50 + 50 * cf0 / ef0) + '%'; }
+      return;
+    }
     const t = tol(), afinada = Math.abs(cents) <= t;
     $('#sub').textContent = `${qual} · ${afinada ? 'Afinado' : Math.abs(cents) > 50 ? (cents > 0 ? 'muito aguda: afrouxe' : 'muito grave: aperte') : cents > 0 ? 'Afrouxe' : 'Aperte'}`;
     const c = Math.max(-50, Math.min(50, cents)), ef = escalaFina(), cf = Math.max(-ef, Math.min(ef, cents));
@@ -120,7 +133,7 @@ export function telaAfinador(tela) {
     $('#nivel').style.width = Math.max(0, Math.min(100, (20 * Math.log10(r.rms + 1e-9) + 60) * 2)) + '%';
     if (r.tipo === 'silencio') { tela.querySelector('.afinador').dataset.estado = ''; $('#estab').textContent = 'aguardando som'; return; }
     if (r.tipo === 'mantida') { $('#estab').textContent = 'leitura mantida (toque de novo)'; return; }
-    if (r.tipo === 'medindo') { mostrar(r.f, 5, false); $('#estab').textContent = 'medindo…'; return; }
+    if (r.tipo === 'medindo') { mostrar(r.f, 5, false, r.estavelCedo); $('#estab').textContent = 'medindo…'; return; }
     mostrar(r.f, r.desvio);
     $('#estab').textContent = r.estavel ? `estável (±${r.desvio.toFixed(2).replace('.', ',')} c)` : 'medindo…';
   }

@@ -141,7 +141,18 @@ export function refinarFundamental(x, taxa, f0, iteracoes = 2) {
 
 // Precisão (tolerância para "afinado"), como nos afinadores de referência: Normal ±4 cents (a diferença quase não se
 // ouve), Exigente ±2 e Máxima ±1 (regulagem fina, luthier).
-export const PRECISOES = { normal: { tol: 4, nome: 'Normal (±4 cents)' }, exigente: { tol: 2, nome: 'Exigente (±2 cents)' }, maxima: { tol: 1, nome: 'Máxima (±1 cent)' } };
+// Cada precisão tem a sua velocidade: quanto menor a tolerância, mais som é preciso juntar (janela maior, mais leituras
+// na mediana, suavização mais lenta). Na Normal o retorno vem rápido; na Máxima, o rigor de décimos de cent.
+// leitor: janelaMax (amostras do refinamento), nEstab (leituras na mediana), alfa [tremor, girando a tarraxa],
+// ataqueMs (espera após a palhetada); quadro: ms entre leituras. Medido em tools/testes/afinador-resposta.mjs.
+export const PRECISOES = {
+  normal: { tol: 4, nome: 'Normal (±4 cents)', quadro: 25, leitor: { janelaMax: 6144, nEstab: 3, alfa: [0.6, 0.95], ataqueMs: 60 } },
+  exigente: { tol: 2, nome: 'Exigente (±2 cents)', quadro: 30, leitor: { janelaMax: 9216, nEstab: 4, alfa: [0.45, 0.9], ataqueMs: 90 } },
+  maxima: { tol: 1, nome: 'Máxima (±1 cent)', quadro: 35, leitor: { janelaMax: 16384, nEstab: 5, alfa: [0.35, 0.8], ataqueMs: 120 } },
+};
+// Para que lado girar já na primeira leitura da palhetada: só quando a corda está claramente fora (o ataque da corda
+// soa ~1-2 cents alto, então a margem é a tolerância + 3 cents); perto da nota espera a leitura completa.
+export const direcaoCedo = (cents, tol) => Math.abs(cents) > tol + 3 ? (cents < 0 ? 'aperte' : 'afrouxe') : null;
 
 // Filtros na entrada do microfone (o app monta com BiquadFilter; os testes aplicam os mesmos com filtrarEntrada):
 // passa-altas suave em 50 Hz (vento, batida no tampo) e notch estreito em 50 e 60 Hz (zumbido da rede elétrica, que
@@ -176,8 +187,9 @@ export const ehZumbido = f => REDE.some(r => Math.abs(centsEntre(f, r)) < 20);
 // curta não acha a nota, tenta uma janela maior (mais períodos = mais robusta com som fraco). A leitura segue a nota
 // enquanto ela soa (até cair a `manter` do pico) — só depois congela a última leitura boa.
 // As opções permitem reproduzir o comportamento antigo nos testes (comparação antes × depois).
-export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05, janelaExtra = true, pisoAdaptativo = true } = {}) {
-  const est = criarEstabilizador(5);
+export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05, janelaExtra = true, pisoAdaptativo = true,
+  janelaMax = 16384, nEstab = 5, alfa = [0.35, 0.8], ataqueMs = 120 } = {}) {
+  const est = criarEstabilizador(nEstab);
   const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null };
   const limpar = () => { est.limpar(); s.f = null; s.suave = null; s.pico = 0; };
   return {
@@ -205,24 +217,33 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       const nova = !s.f || agora - s.visto > 300 || repalhetada || salto;
       if (!nova && Math.abs(centsEntre(r.freq, s.f)) > 40) return s.suave != null ? { tipo: 'mantida', rms, f: Math.pow(2, s.suave) } : { tipo: 'silencio', rms };
       s.rmsAnt = rms;
-      if (nova) { est.limpar(); s.ataque = agora; s.pico = 0; s.suave = null; }
+      if (nova) { est.limpar(); s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; }
       s.pico = Math.max(s.pico, rms);
       // janela que cresce desde a palhetada: ~0,13 s (resposta rápida) até 0,34 s (precisão), sem o som de antes
       const desde = Math.round((agora - s.ataque) / 1000 * taxa);
-      const tam = Math.max(6144, Math.min(buf.length, desde));
+      // som fraco (perto do limiar): janela inteira, o ruído pesa mais e precisa de mais períodos para não errar os cents
+      const teto = rms < 6 * limiar ? buf.length : janelaMax;
+      const tam = Math.max(Math.min(6144, teto), Math.min(buf.length, teto, desde));
       const f = refinarFundamental(buf.subarray(buf.length - tam), taxa, r.freq);
       s.f = f; s.visto = agora;
       // logo após a palhetada a corda soa um pouco mais alta: nos primeiros 0,12 s só mostra a nota
-      if (agora - s.ataque < 120) return { tipo: 'medindo', rms, f };
+      // aviso antecipado ("Aperte"/"Afrouxe" antes da medição final): só com ≥50 ms de som, leitura bem periódica e duas
+      // leituras seguidas concordando (a janela logo após a palhetada ainda tem pouca nota e pode errar o lado)
+      const cedoOk = r.clareza >= 0.92 && agora - s.ataque >= 50;
+      s.cedoN = cedoOk && s.fAnt && Math.abs(centsEntre(f, s.fAnt)) < 3 ? s.cedoN + 1 : cedoOk ? 1 : 0;
+      s.fAnt = cedoOk ? f : null;
+      const estavelCedo = s.cedoN >= 2;
+      // leitura final só com ≥12 períodos da nota na janela (corda grave precisa de mais tempo: 82 Hz → ~146 ms)
+      if (agora - s.ataque < Math.max(ataqueMs, 12000 / f)) return { tipo: 'medindo', rms, f, estavelCedo };
       // nota quase sumindo: o ruído passa a dominar → mantém a última leitura boa em vez de tremer
       if (rms < manter * s.pico && s.suave != null) return { tipo: 'mantida', rms, f: Math.pow(2, s.suave) };
       if (r.clareza >= clarezaMin) est.adicionar(f);         // leitura pouco periódica (ruído, duas cordas) não entra
       const v = est.valor();
-      if (!v) return { tipo: 'medindo', rms, f };
+      if (!v) return { tipo: 'medindo', rms, f, estavelCedo };
       // suavização adaptativa: tremor anda devagar; girando a tarraxa (>3 cents) o ponteiro acompanha rápido
       const lg = Math.log2(v.freq);
       if (s.suave == null) s.suave = lg;
-      else s.suave += (Math.abs(1200 * (lg - s.suave)) > 3 ? 0.8 : 0.35) * (lg - s.suave);
+      else s.suave += (Math.abs(1200 * (lg - s.suave)) > 3 ? alfa[1] : alfa[0]) * (lg - s.suave);
       return { tipo: 'leitura', rms, f: Math.pow(2, s.suave), desvio: v.desvioCents, estavel: v.amostras >= 3 && v.desvioCents < 0.5 };
     },
   };
