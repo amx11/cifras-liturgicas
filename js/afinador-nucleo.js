@@ -227,7 +227,13 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       if (r && aceitar && !aceitar(r.freq)) r = null;        // filtro de ruído ligado: fora das cordas = ruído (voz, conversa, ventilador)
       if (!r) {
         // sem nota: aprende o ruído do ambiente (desce rápido, sobe devagar — uma nota não "ensina" ruído alto)
-        s.piso = s.piso == null ? rms : rms < s.piso ? 0.7 * s.piso + 0.3 * rms : 0.98 * s.piso + 0.02 * rms;
+        // O piso NÃO aprende com subida brusca de volume: os primeiros quadros do ataque de uma palhetada (ainda sem altura clara)
+        // eram tratados como ruído, o piso subia e a nota ficava ignorada por ~1 s. Começa baixo (≤ 0,004) e só sobe livre se
+        // faz mais de 1,5 s que não há nota (ruído de fundo que cresceu de verdade).
+        const livre = agora - s.visto > 1500;
+        if (s.piso == null) s.piso = Math.min(rms, 0.004);
+        else if (rms < s.piso) s.piso = 0.7 * s.piso + 0.3 * rms;
+        else if (livre ? rms < 6 * s.piso : rms < 2 * s.piso) s.piso = 0.98 * s.piso + 0.02 * rms;
         if (agora - s.visto > 1500) { limpar(); return { tipo: 'silencio', rms }; }
         return s.suave != null ? { tipo: 'mantida', rms, f: valor(), definida: s.definida } : { tipo: 'silencio', rms };
       }
