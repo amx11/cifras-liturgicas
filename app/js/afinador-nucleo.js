@@ -108,7 +108,10 @@ export function refinarFundamental(x, taxa, f0, iteracoes = 2) {
   const n = x.length;
   let f = f0;
   for (let it = 0; it < iteracoes; it++) {
-    const L = Math.max(8, Math.round(2 * taxa / f));          // 2 períodos
+    // média móvel de P períodos (P de 2 a 4): quanto mais períodos, mais estreita a banda e mais o ruído perto da corda é
+    // rejeitado (rumor de 59-70 Hz vazava para o Mi grave com só 2 períodos); P cresce enquanto a janela permitir (n ≥ 3·P períodos)
+    const P = Math.min(4, Math.max(2, Math.floor(n / (3 * taxa / f))));
+    const L = Math.max(8, Math.round(P * taxa / f));
     if (n < L * 3) return f;
     const w = 2 * Math.PI * f / taxa;
     const re = new Float64Array(n), im = new Float64Array(n);
@@ -158,7 +161,10 @@ export const direcaoCedo = (cents, tol) => Math.abs(cents) > tol + 3 ? (cents < 
 // passa-altas suave em 50 Hz (vento, batida no tampo) e notch estreito em 50 e 60 Hz (zumbido da rede elétrica, que
 // se mistura à corda e atrapalha a leitura). Q do notch 8 = faixa de ~7 Hz: o Mi grave (82 Hz) passa inteiro.
 // No Web Audio o Q do passa-altas é em dB (0,5 dB ≈ 1,06).
-export const FILTROS_ENTRADA = [{ tipo: 'highpass', f: 50, q: 0.5 }, { tipo: 'notch', f: 50, q: 8 }, { tipo: 'notch', f: 60, q: 8 }];
+// Passa-altas de 4ª ordem (Butterworth: dois estágios com Q 0,541 e 1,307, em dB no Web Audio: −5,34 e +2,32) em 68 Hz: corta
+// forte o rumor grave de ambiente (ventilador, ar-condicionado, trânsito: 40-64 Hz) perdendo só ~1 dB no Mi grave (82 Hz).
+// Medido com a gravação real do ambiente de quem usa: o rumor abaixo de 120 Hz era 66% da energia e fazia o Mi grave errar 4-7 cents.
+export const FILTROS_ENTRADA = [{ tipo: 'highpass', f: 68, q: -5.34 }, { tipo: 'highpass', f: 68, q: 2.32 }, { tipo: 'notch', f: 50, q: 8 }, { tipo: 'notch', f: 60, q: 8 }];
 export function filtrarEntrada(x, taxa) {
   let y = Float64Array.from(x);
   for (const { tipo, f, q } of FILTROS_ENTRADA) {
@@ -248,7 +254,10 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       const teto = rms < 6 * limiar ? buf.length : janelaMax;
       // a medição ignora os primeiros 150 ms da palhetada (a corda soa mais aguda ao ser tocada e enviesa a média)
       const util = Math.max(0, desde - Math.round(0.15 * taxa));
-      const tam = Math.max(Math.min(6144, teto), Math.min(buf.length, teto, util));
+      // corda grave (< 130 Hz: Mi e Lá): janela maior só para o valor definido (a seta ao vivo segue com a janela curta). O rumor
+      // de ambiente fica justamente em 40-120 Hz; com mais períodos (≥ 20 do Mi) a média móvel o rejeita
+      const tetoF = r.freq < 130 ? Math.max(teto, 12288) : teto;
+      const tam = Math.max(Math.min(6144, tetoF), Math.min(buf.length, tetoF, util));
       const f = refinarFundamental(buf.subarray(buf.length - tam), taxa, r.freq);
       // seta e número ao vivo: janela curta (≤85 ms) e suavização rápida em qualquer precisão, para acompanhar a tarraxa
       // em tempo real; a janela longa (f) só serve para decidir quando declarar o valor "definido"

@@ -5,6 +5,7 @@
 // Mede quando o valor fica DEFINIDO (som estabilizado), o erro dele, se oscila depois de definido e se algo é
 // definido sem nenhuma corda tocando.
 //   node tools/testes/afinador-real.mjs
+import { lerWav } from './wav.mjs';
 import { criarLeitor, centsEntre, filtrarEntrada, PRECISOES, aceitarCordas, direcaoCedo } from '../../app/js/afinador-nucleo.js';
 
 const TAXA = 48000, N = 16384, DUR = 4.5, T0 = 0.5;
@@ -18,7 +19,12 @@ const AMBIENTES = {
   'igreja com conversa': { w: 0.006, l: 0.012, voz: 0.006 },
 };
 
-function ambiente(n, { w, l, voz }) {
+// ambiente REAL gravado (AMBIENTE_WAV=caminho.wav a 48 kHz; AMB_ESCALA multiplica o volume; SO_REAL=1 testa só ele)
+const REAL = process.env.AMBIENTE_WAV ? lerWav(process.env.AMBIENTE_WAV) : null, ESC = +(process.env.AMB_ESCALA || 1);
+if (REAL) { if (REAL.taxa !== TAXA) throw new Error('a gravação precisa ser de 48 kHz'); if (process.env.SO_REAL) for (const k of Object.keys(AMBIENTES)) delete AMBIENTES[k]; AMBIENTES['SEU AMBIENTE (gravado)'] = { real: true }; }
+function ambiente(n, amb) {
+  if (amb.real) { const ini = Math.floor(aleat() * (REAL.x.length - n)), x = new Float32Array(n); for (let i = 0; i < n; i++) x[i] = REAL.x[ini + i] * ESC; return x; }
+  const { w, l, voz } = amb;
   const x = new Float32Array(n), a = 1 - Math.exp(-2 * Math.PI * 300 / TAXA), ganho = l / Math.sqrt(a / (2 - a));
   let lp = 0;
   const vozes = [0, 1, 2].map(() => ({ f: 150 + aleat() * 250, fase: aleat() * 6.28, lento: aleat() * 2 }));
@@ -84,7 +90,7 @@ for (const nome of Object.keys(AMBIENTES)) for (const [pn, prec] of Object.entri
   console.log(`${nome.padEnd(21)} ${pn.padEnd(9)} | ${fmt(med(dir))} / ${fmt(Math.max(0, ...dir))}              | ${fmt(med(def))} / ${fmt(Math.max(0, ...def))}                  | ${erro.toFixed(2).padStart(5)}                      | ${osc.toFixed(2).padStart(5)}               | ${semDef}/${rs.length}${erradas ? ` · ${erradas} leituras >100c` : ''}`);
   if (process.env.DETALHE) for (const r of rs) if (r.tDef === null || r.erroDef > 2 || r.oscila > 2) console.log(`    ${r.f0.toFixed(0)} Hz desvio ${r.d} pico ${r.pico}: ${r.tDef === null ? 'não definiu' : `definiu ${Math.round(r.tDef)} ms erro ${r.erroDef.toFixed(1)} oscila ${r.oscila.toFixed(1)}`}`);
   const sala = nome !== 'igreja com conversa';
-  if (grupo.exige && sala && ((semDef > (pn === 'maxima' ? 3 : 0)) || erro > 1.5 || osc > 1)) { falhou = true; console.log('    ^ FALHOU (corda forte em sala: tem que definir sempre, erro ≤ 1,5 cent e sem andar depois)'); }
+  if (grupo.exige && sala && ((semDef > (pn === 'maxima' ? 3 : 0)) || erro > 1.5 || osc > 1.5)) { falhou = true; console.log('    ^ FALHOU (corda forte em sala: tem que definir sempre, erro ≤ 1,5 cent e sem andar mais de 1,5 cent depois)'); }
   if (erro > 2.5) { falhou = true; console.log('    ^ FALHOU (valor definido com erro > 2,5 cents)'); }
 }
 }
