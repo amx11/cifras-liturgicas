@@ -7,7 +7,7 @@ import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe,
 let sessao = null;
 
 // Maria rezando: mãos postas e olhos fechados enquanto afina; ao passar pelo verde (afinado) abre os olhos, sorri e faz "ok"
-const MARIA = `<svg viewBox="0 0 140 168" width="132" height="158" role="img" aria-label="Maria rezando">
+const MARIA = `<svg viewBox="0 0 140 168" width="104" height="125" role="img" aria-label="Maria rezando">
   <defs>
     <radialGradient id="m-luz" cx="50%" cy="38%" r="55%"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></radialGradient>
     <linearGradient id="m-manto" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a8ad6"/><stop offset="1" stop-color="#1f4f94"/></linearGradient>
@@ -26,16 +26,16 @@ const MARIA = `<svg viewBox="0 0 140 168" width="132" height="158" role="img" ar
     <path d="M64 112Q62 132 58 150M76 112Q78 132 82 150M70 118V154" fill="none" stroke="#cfc8b4" stroke-width="1" stroke-linecap="round"/>
     <path d="M70 15C54 15 47 29 48 46C49 62 58 72 70 72C82 72 91 62 92 46C93 29 86 15 70 15Z" fill="#fffdf6" stroke="#cfc8b4" stroke-width="1"/>
     <path d="M70 18C57 18 50 30 51 45" fill="none" stroke="#e6e0cf" stroke-width="2" stroke-linecap="round"/>
-    <ellipse cx="70" cy="47" rx="14" ry="17" fill="#f4d5b8"/>
-    <path d="M56 42C57 31 63 27 70 27C77 27 83 31 84 42C79 35 74 33 70 33C66 33 61 35 56 42Z" fill="#fffdf6"/>
-    <path d="M57 41C60 36 65 34 70 34C75 34 80 36 83 41" fill="none" stroke="#7a4e30" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>
-    <path d="M70 48Q68.5 54 71 55" fill="none" stroke="#d3a483" stroke-width="1.2" stroke-linecap="round"/>
-    <circle cx="60" cy="56" r="3.6" fill="#f2a79c" opacity=".38"/><circle cx="80" cy="56" r="3.6" fill="#f2a79c" opacity=".38"/>
-    <path d="M60.5 41.6Q64 40 67.5 41.4M72.5 41.4Q76 40 79.5 41.6" fill="none" stroke="#8a5e40" stroke-width="1.1" stroke-linecap="round" class="m-sobrancelha"/>
-    <g class="m-olhos-fechados" fill="none" stroke="#4a2f22" stroke-width="1.8" stroke-linecap="round"><path d="M60 47.5Q64 51 68 47.5"/><path d="M72 47.5Q76 51 80 47.5"/><path d="M59.5 47.8l-1.6-1.2M80.5 47.8l1.6-1.2" stroke-width="1.2"/></g>
-    <g class="m-olhos-abertos"><ellipse cx="64" cy="47.5" rx="3.3" ry="3.8" fill="#fff"/><ellipse cx="76" cy="47.5" rx="3.3" ry="3.8" fill="#fff"/><circle cx="64.2" cy="48" r="2.4" fill="#4a2f22"/><circle cx="76.2" cy="48" r="2.4" fill="#4a2f22"/><circle cx="65" cy="47" r=".9" fill="#fff"/><circle cx="77" cy="47" r=".9" fill="#fff"/></g>
-    <path class="m-boca-serena" d="M65.5 62Q70 64.4 74.5 62" fill="none" stroke="#b05a50" stroke-width="1.8" stroke-linecap="round"/>
-    <path class="m-boca-sorriso" d="M62.5 60.5Q70 70 77.5 60.5Q70 63.4 62.5 60.5Z" fill="#fffaf2" stroke="#b05a50" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M58 44C58 33 63 29 70 29C77 29 82 33 82 44C82 53 77 62.5 70 64C63 62.5 58 53 58 44Z" fill="#f6dcc4"/>
+    <path d="M57 43C57 31 63 27 70 27C77 27 83 31 83 43C79 35 74 32.5 70 32.5C66 32.5 61 35 57 43Z" fill="#fffdf6"/>
+    <path d="M58.5 41C61 36.5 65.5 34.5 70 34.5C74.5 34.5 79 36.5 81.5 41" fill="none" stroke="#8a5e40" stroke-width="1" stroke-linecap="round" opacity=".55"/>
+    <path d="M70 50Q69 54 71 54.6" fill="none" stroke="#dbb394" stroke-width=".9" stroke-linecap="round"/>
+    <circle cx="62" cy="55.5" r="3" fill="#f4b3a8" opacity=".25"/><circle cx="78" cy="55.5" r="3" fill="#f4b3a8" opacity=".25"/>
+    <path d="M61.5 42.4Q65 40.4 68 42M72 42Q75 40.4 78.5 42.4" fill="none" stroke="#9a6e50" stroke-width=".85" stroke-linecap="round" class="m-sobrancelha"/>
+    <g class="m-olhos-fechados" fill="none" stroke="#5a3b2a" stroke-width="1.15" stroke-linecap="round"><path d="M61.5 47Q65 49.6 68.5 47"/><path d="M71.5 47Q75 49.6 78.5 47"/><path d="M61 47.2l-1.3-.9M79 47.2l1.3-.9" stroke-width=".9"/></g>
+    <g class="m-olhos-abertos"><ellipse cx="65" cy="47" rx="2.7" ry="2.9" fill="#fff"/><ellipse cx="75" cy="47" rx="2.7" ry="2.9" fill="#fff"/><circle cx="65.1" cy="47.3" r="1.9" fill="#5a3b2a"/><circle cx="75.1" cy="47.3" r="1.9" fill="#5a3b2a"/><circle cx="65.7" cy="46.6" r=".65" fill="#fff"/><circle cx="75.7" cy="46.6" r=".65" fill="#fff"/><path d="M62 45.2Q65 43.6 68 45.2M72 45.2Q75 43.6 78 45.2" fill="none" stroke="#5a3b2a" stroke-width=".9" stroke-linecap="round"/></g>
+    <path class="m-boca-serena" d="M67 59.6Q70 61 73 59.6" fill="none" stroke="#c2776c" stroke-width="1.2" stroke-linecap="round"/>
+    <path class="m-boca-sorriso" d="M65.5 58.6Q70 63.6 74.5 58.6" fill="none" stroke="#c2776c" stroke-width="1.3" stroke-linecap="round"/>
     <g class="m-reza">
       <path d="M50 74C46 84 49 96 58 102L62 98C57 92 55 84 56 76Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
       <path d="M90 74C94 84 91 96 82 102L78 98C83 92 85 84 84 76Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
