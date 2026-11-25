@@ -32,5 +32,6 @@ export const MARIA_HTML = `<div class="maria-quadro">
     <img class="m-img m-rezando" src="assets/maria-rezando.webp" alt="" draggable="false">
     <img class="m-img m-afinada" src="assets/maria-afinada.webp" alt="" draggable="false">
     <div class="m-maos"><img class="m-mao m-mao-e" src="assets/maria-mao-esq.webp" alt="" draggable="false"><img class="m-mao m-mao-d" src="assets/maria-mao-dir.webp" alt="" draggable="false"></div>
+    <img class="m-img m-mangas" src="assets/maria-mangas.webp" alt="" draggable="false">
   </div>
 </div>`;

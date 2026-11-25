@@ -1,8 +1,8 @@
 // Service worker: guarda o app e o acervo para funcionar sem internet
-const VERSAO = 'cl-v106';
+const VERSAO = 'cl-v107';
 const ARQUIVOS = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/ui.js', 'js/dados.js', 'js/cifra.js', 'js/pdf.js',
   'js/missas.js', 'js/importar.js', 'js/ouvir.js', 'js/tocar.js', 'js/painel.js', 'js/exportar.js', 'js/pdf-missa.js', 'js/visualizar-pdf.js', 'js/ocr.js', 'js/ocr-cifra.js', 'js/partitura.js', 'js/partitura-imagem.js', 'js/conferir.js', 'js/musicxml.js', 'vendor/fflate.mjs', 'vendor/jspdf.umd.min.js', 'js/acordes-audio.js', 'js/afinador.js', 'js/afinador-nucleo.js', 'js/sumario.js', 'js/classificar.js', 'js/mscx.js', 'js/folheto.js', 'js/oracoes.js', 'js/instrumentos.js', 'js/apresentacao.js', 'js/capas.js', 'js/nuvem.js', 'js/firebase-config.js', 'vendor/firebase/firebase-app.js', 'vendor/firebase/firebase-auth.js', 'vendor/firebase/firebase-firestore.js', 'vendor/pptxgen.bundle.js', 'vendor/jsQR.js', 'manifest.webmanifest', 'icone.svg',
-  'js/afinador.js', 'js/afinador-nucleo.js', 'js/maria.js', 'assets/maria-rezando.webp', 'assets/maria-afinada.webp', 'assets/maria-mao-esq.webp', 'assets/maria-mao-dir.webp', 'icone-192.png', 'icone-512.png', 'data/musicas.json', 'data/pasta.json', 'data/repertorios.json', 'data/adicionadas.json', 'data/canal.json', 'data/salmodiai.json', 'data/versoes.json'];
+  'js/afinador.js', 'js/afinador-nucleo.js', 'js/maria.js', 'assets/maria-rezando.webp', 'assets/maria-afinada.webp', 'assets/maria-mangas.webp', 'assets/maria-mao-esq.webp', 'assets/maria-mao-dir.webp', 'icone-192.png', 'icone-512.png', 'data/musicas.json', 'data/pasta.json', 'data/repertorios.json', 'data/adicionadas.json', 'data/canal.json', 'data/salmodiai.json', 'data/versoes.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSAO).then(c => Promise.all(ARQUIVOS.map(a => c.add(a).catch(() => {})))).then(() => self.skipWaiting()));
