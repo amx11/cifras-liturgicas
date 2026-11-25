@@ -2,7 +2,7 @@
 // núcleo (criarLeitor), testado com violão simulado em tools/testes/afinador-sensibilidade.mjs; aqui só a tela.
 import { estado, salvarPrefs } from './dados.js';
 import { aviso } from './ui.js';
-import { MARIA_HTML, giroDeCents } from './maria.js';
+import { MARIA_HTML, giroDeCents, animarMaria } from './maria.js';
 import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe, INSTRUMENTOS, cordasDoInstrumento, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
 
 let sessao = null;
@@ -60,6 +60,7 @@ export function telaAfinador(tela) {
       <p class="pequeno suave" id="dica"></p>
     </div>`;
   const $ = s => tela.querySelector(s);
+  animarMaria($('.maria'));
   // leitor com a velocidade da precisão e, se o filtro de ruído estiver ligado, só aceitando alturas perto das cordas
   // (a corda escolhida, ou qualquer uma das 6 no Automático; no Cromático o filtro não se aplica)
   const novoLeitor = () => criarLeitor({ ...PRECISOES[cfg.precisao].leitor,
