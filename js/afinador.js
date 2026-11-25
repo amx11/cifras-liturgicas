@@ -7,28 +7,58 @@ import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe,
 let sessao = null;
 
 // Maria rezando: mãos postas e olhos fechados enquanto afina; ao passar pelo verde (afinado) abre os olhos, sorri e faz "ok"
-const MARIA = `<svg viewBox="0 0 120 140" width="112" height="131" role="img" aria-label="Maria rezando">
-  <g class="m-aura"><ellipse cx="60" cy="19" rx="31" ry="8" fill="none" stroke="#e8b730" stroke-width="3.5"/></g>
+const MARIA = `<svg viewBox="0 0 140 168" width="132" height="158" role="img" aria-label="Maria rezando">
+  <defs>
+    <radialGradient id="m-luz" cx="50%" cy="38%" r="55%"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="m-manto" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a8ad6"/><stop offset="1" stop-color="#1f4f94"/></linearGradient>
+    <linearGradient id="m-veste" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e9e4d6"/><stop offset=".5" stop-color="#fffdf6"/><stop offset="1" stop-color="#e9e4d6"/></linearGradient>
+    <linearGradient id="m-ouro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d462"/><stop offset="1" stop-color="#d79a1c"/></linearGradient>
+  </defs>
+  <circle cx="70" cy="42" r="46" fill="url(#m-luz)" class="m-luz"/>
+  <ellipse cx="70" cy="160" rx="42" ry="5" fill="#1c3a66" opacity=".16"/>
   <g class="m-corpo">
-    <path d="M60 22C31 22 23 52 21 82L16 138H104L99 82C97 52 89 22 60 22Z" fill="#2f6db5"/>
-    <path d="M60 22C31 22 23 52 21 82L16 138H40L38 90C38 56 46 30 60 22Z" fill="#245a98"/>
-    <path d="M60 30C42 30 38 52 38 70L40 138H80L82 70C82 52 78 30 60 30Z" fill="#f7f4ec"/>
-    <ellipse cx="60" cy="52" rx="16" ry="19" fill="#f2d2b4"/>
-    <path d="M43 50C43 32 52 28 60 28C68 28 77 32 77 50C72 41 66 38 60 38C54 38 48 41 43 50Z" fill="#f7f4ec" stroke="#d9d3c4" stroke-width="1"/>
-    <circle cx="52" cy="58" r="3.2" fill="#f0a8a0" opacity=".45"/><circle cx="68" cy="58" r="3.2" fill="#f0a8a0" opacity=".45"/>
-    <g class="m-olhos-fechados" fill="none" stroke="#5a3b2a" stroke-width="1.8" stroke-linecap="round"><path d="M50 52Q54 55 58 52"/><path d="M62 52Q66 55 70 52"/></g>
-    <g class="m-olhos-abertos"><ellipse cx="54" cy="52" rx="2.3" ry="2.8" fill="#4a2f22"/><ellipse cx="66" cy="52" rx="2.3" ry="2.8" fill="#4a2f22"/><circle cx="54.8" cy="51" r=".8" fill="#fff"/><circle cx="66.8" cy="51" r=".8" fill="#fff"/></g>
-    <path class="m-boca-serena" d="M55 63Q60 65 65 63" fill="none" stroke="#a5564a" stroke-width="1.8" stroke-linecap="round"/>
-    <path class="m-boca-sorriso" d="M52 61Q60 71 68 61Q60 65 52 61Z" fill="#fff" stroke="#a5564a" stroke-width="1.8" stroke-linejoin="round"/>
-    <g class="m-reza"><path d="M60 80C54 80 53 92 55 106L60 110L65 106C67 92 66 80 60 80Z" fill="#f2d2b4" stroke="#d6b090" stroke-width="1"/><path d="M60 82V108" stroke="#d6b090" stroke-width="1"/></g>
+    <path d="M70 15C47 15 40 34 38 58C36 84 27 118 19 152Q70 168 121 152C113 118 104 84 102 58C100 34 93 15 70 15Z" fill="url(#m-manto)"/>
+    <path d="M70 15C47 15 40 34 38 58C36 84 27 118 19 152Q70 168 121 152C113 118 104 84 102 58C100 34 93 15 70 15Z" fill="none" stroke="url(#m-ouro)" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M38 58C36 84 27 118 19 152L34 156C42 122 48 92 50 66Z" fill="#173f7a" opacity=".45"/>
+    <path d="M102 58C104 84 113 118 121 152L106 156C98 122 92 92 90 66Z" fill="#173f7a" opacity=".3"/>
+    <g fill="#f7d462" opacity=".9"><path d="M46 112l1.4 3.4 3.4 1.4-3.4 1.4-1.4 3.4-1.4-3.4-3.4-1.4 3.4-1.4z"/><path d="M96 126l1.4 3.4 3.4 1.4-3.4 1.4-1.4 3.4-1.4-3.4-3.4-1.4 3.4-1.4z"/><path d="M40 86l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/></g>
+    <path d="M70 66C57 68 52 80 51 100L45 152Q70 160 95 152L89 100C88 80 83 68 70 66Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
+    <path d="M64 112Q62 132 58 150M76 112Q78 132 82 150M70 118V154" fill="none" stroke="#cfc8b4" stroke-width="1" stroke-linecap="round"/>
+    <path d="M70 15C54 15 47 29 48 46C49 62 58 72 70 72C82 72 91 62 92 46C93 29 86 15 70 15Z" fill="#fffdf6" stroke="#cfc8b4" stroke-width="1"/>
+    <path d="M70 18C57 18 50 30 51 45" fill="none" stroke="#e6e0cf" stroke-width="2" stroke-linecap="round"/>
+    <ellipse cx="70" cy="47" rx="14" ry="17" fill="#f4d5b8"/>
+    <path d="M56 42C57 31 63 27 70 27C77 27 83 31 84 42C79 35 74 33 70 33C66 33 61 35 56 42Z" fill="#fffdf6"/>
+    <path d="M57 41C60 36 65 34 70 34C75 34 80 36 83 41" fill="none" stroke="#7a4e30" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>
+    <path d="M70 48Q68.5 54 71 55" fill="none" stroke="#d3a483" stroke-width="1.2" stroke-linecap="round"/>
+    <circle cx="60" cy="56" r="3.6" fill="#f2a79c" opacity=".38"/><circle cx="80" cy="56" r="3.6" fill="#f2a79c" opacity=".38"/>
+    <path d="M60.5 41.6Q64 40 67.5 41.4M72.5 41.4Q76 40 79.5 41.6" fill="none" stroke="#8a5e40" stroke-width="1.1" stroke-linecap="round" class="m-sobrancelha"/>
+    <g class="m-olhos-fechados" fill="none" stroke="#4a2f22" stroke-width="1.8" stroke-linecap="round"><path d="M60 47.5Q64 51 68 47.5"/><path d="M72 47.5Q76 51 80 47.5"/><path d="M59.5 47.8l-1.6-1.2M80.5 47.8l1.6-1.2" stroke-width="1.2"/></g>
+    <g class="m-olhos-abertos"><ellipse cx="64" cy="47.5" rx="3.3" ry="3.8" fill="#fff"/><ellipse cx="76" cy="47.5" rx="3.3" ry="3.8" fill="#fff"/><circle cx="64.2" cy="48" r="2.4" fill="#4a2f22"/><circle cx="76.2" cy="48" r="2.4" fill="#4a2f22"/><circle cx="65" cy="47" r=".9" fill="#fff"/><circle cx="77" cy="47" r=".9" fill="#fff"/></g>
+    <path class="m-boca-serena" d="M65.5 62Q70 64.4 74.5 62" fill="none" stroke="#b05a50" stroke-width="1.8" stroke-linecap="round"/>
+    <path class="m-boca-sorriso" d="M62.5 60.5Q70 70 77.5 60.5Q70 63.4 62.5 60.5Z" fill="#fffaf2" stroke="#b05a50" stroke-width="1.6" stroke-linejoin="round"/>
+    <g class="m-reza">
+      <path d="M50 74C46 84 49 96 58 102L62 98C57 92 55 84 56 76Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
+      <path d="M90 74C94 84 91 96 82 102L78 98C83 92 85 84 84 76Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
+      <path d="M70 76C65 79 64 90 66 102L70 106L74 102C76 90 75 79 70 76Z" fill="#f4d5b8" stroke="#d2a888" stroke-width="1"/>
+      <path d="M70 80V104" stroke="#d2a888" stroke-width="1" stroke-linecap="round"/>
+      <path d="M62 98L78 98L76 106L64 106Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
+    </g>
     <g class="m-ok">
-      <path d="M44 100C50 96 56 98 60 102" fill="none" stroke="#f2d2b4" stroke-width="9" stroke-linecap="round"/>
-      <path d="M84 120C86 108 84 98 80 92" fill="none" stroke="#245a98" stroke-width="12" stroke-linecap="round"/>
-      <g transform="translate(82 82)"><circle r="7.5" fill="none" stroke="#f2d2b4" stroke-width="4.2"/><circle r="7.5" fill="none" stroke="#d6b090" stroke-width=".8"/>
-        <g fill="#f2d2b4" stroke="#d6b090" stroke-width=".8"><rect x="-1" y="-24" width="5" height="17" rx="2.5" transform="rotate(-4)"/><rect x="4" y="-22" width="5" height="16" rx="2.5" transform="rotate(10)"/><rect x="8" y="-17" width="5" height="14" rx="2.5" transform="rotate(24)"/></g></g>
-      <g class="m-brilhos" fill="#e8b730"><path d="M100 60l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M16 66l1.5 3.5 3.5 1.5-3.5 1.5-1.5 3.5-1.5-3.5-3.5-1.5 3.5-1.5z"/></g>
+      <path d="M52 80C50 92 56 102 66 104" fill="none" stroke="#cfc8b4" stroke-width="13" stroke-linecap="round"/>
+      <path d="M52 80C50 92 56 102 66 104" fill="none" stroke="url(#m-veste)" stroke-width="11" stroke-linecap="round"/>
+      <circle cx="68" cy="104" r="5" fill="#f4d5b8" stroke="#d2a888" stroke-width="1"/>
+      <path d="M92 90C100 86 104 80 105 72" fill="none" stroke="#cfc8b4" stroke-width="15" stroke-linecap="round"/>
+      <path d="M92 90C100 86 104 80 105 72" fill="none" stroke="url(#m-veste)" stroke-width="13" stroke-linecap="round"/>
+      <g transform="translate(106 62)">
+        <g fill="#f4d5b8" stroke="#d2a888" stroke-width="1"><rect x="-1.6" y="-20" width="5.4" height="15" rx="2.7" transform="rotate(-8)"/><rect x="3.6" y="-18" width="5.2" height="14" rx="2.6" transform="rotate(8)"/><rect x="8" y="-13" width="5" height="12" rx="2.5" transform="rotate(24)"/><ellipse cx="2" cy="2" rx="8.5" ry="8"/></g>
+        <circle cx="-1.5" cy="-2" r="5" fill="#fffaf2" stroke="#d2a888" stroke-width="1"/>
+        <path d="M-6.5 -1C-8 -6 -3 -9 .5 -6M-4.5 6C-9 5 -9.5 -1 -6.5 -1" fill="none" stroke="#f4d5b8" stroke-width="3.4" stroke-linecap="round"/>
+        <circle cx="-1.5" cy="-2" r="5" fill="none" stroke="#d2a888" stroke-width="1"/>
+      </g>
+      <g class="m-brilhos" fill="url(#m-ouro)"><path d="M124 42l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M20 70l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><path d="M118 96l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z"/></g>
     </g>
   </g>
+  <g class="m-aura"><ellipse cx="70" cy="11" rx="28" ry="7.5" fill="none" stroke="url(#m-ouro)" stroke-width="3.6"/></g>
 </svg>`;
 
 export function pararAfinador() {
