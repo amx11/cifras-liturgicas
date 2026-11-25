@@ -2,64 +2,11 @@
 // núcleo (criarLeitor), testado com violão simulado em tools/testes/afinador-sensibilidade.mjs; aqui só a tela.
 import { estado, salvarPrefs } from './dados.js';
 import { aviso } from './ui.js';
+import { MARIA_HTML, giroDeCents } from './maria.js';
 import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe, INSTRUMENTOS, cordasDoInstrumento, nomePt, midiDe, freqDoMidi, centsEntre, PRECISOES, FILTROS_ENTRADA } from './afinador-nucleo.js';
 
 let sessao = null;
 
-// Maria rezando: mãos postas e olhos fechados enquanto afina; ao passar pelo verde (afinado) abre os olhos, sorri e faz "ok"
-const MARIA = `<svg viewBox="0 0 140 168" width="104" height="125" role="img" aria-label="Maria rezando">
-  <defs>
-    <radialGradient id="m-luz" cx="50%" cy="38%" r="55%"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></radialGradient>
-    <linearGradient id="m-manto" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a8ad6"/><stop offset="1" stop-color="#1f4f94"/></linearGradient>
-    <linearGradient id="m-veste" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e9e4d6"/><stop offset=".5" stop-color="#fffdf6"/><stop offset="1" stop-color="#e9e4d6"/></linearGradient>
-    <linearGradient id="m-ouro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7d462"/><stop offset="1" stop-color="#d79a1c"/></linearGradient>
-  </defs>
-  <circle cx="70" cy="42" r="46" fill="url(#m-luz)" class="m-luz"/>
-  <ellipse cx="70" cy="160" rx="42" ry="5" fill="#1c3a66" opacity=".16"/>
-  <g class="m-corpo">
-    <path d="M70 15C47 15 40 34 38 58C36 84 27 118 19 152Q70 168 121 152C113 118 104 84 102 58C100 34 93 15 70 15Z" fill="url(#m-manto)"/>
-    <path d="M70 15C47 15 40 34 38 58C36 84 27 118 19 152Q70 168 121 152C113 118 104 84 102 58C100 34 93 15 70 15Z" fill="none" stroke="url(#m-ouro)" stroke-width="2.4" stroke-linejoin="round"/>
-    <path d="M38 58C36 84 27 118 19 152L34 156C42 122 48 92 50 66Z" fill="#173f7a" opacity=".45"/>
-    <path d="M102 58C104 84 113 118 121 152L106 156C98 122 92 92 90 66Z" fill="#173f7a" opacity=".3"/>
-    <g fill="#f7d462" opacity=".9"><path d="M46 112l1.4 3.4 3.4 1.4-3.4 1.4-1.4 3.4-1.4-3.4-3.4-1.4 3.4-1.4z"/><path d="M96 126l1.4 3.4 3.4 1.4-3.4 1.4-1.4 3.4-1.4-3.4-3.4-1.4 3.4-1.4z"/><path d="M40 86l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/></g>
-    <path d="M70 66C57 68 52 80 51 100L45 152Q70 160 95 152L89 100C88 80 83 68 70 66Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
-    <path d="M64 112Q62 132 58 150M76 112Q78 132 82 150M70 118V154" fill="none" stroke="#cfc8b4" stroke-width="1" stroke-linecap="round"/>
-    <path d="M70 15C54 15 47 29 48 46C49 62 58 72 70 72C82 72 91 62 92 46C93 29 86 15 70 15Z" fill="#fffdf6" stroke="#cfc8b4" stroke-width="1"/>
-    <path d="M70 18C57 18 50 30 51 45" fill="none" stroke="#e6e0cf" stroke-width="2" stroke-linecap="round"/>
-    <path d="M58 44C58 33 63 29 70 29C77 29 82 33 82 44C82 53 77 62.5 70 64C63 62.5 58 53 58 44Z" fill="#f6dcc4"/>
-    <path d="M57 43C57 31 63 27 70 27C77 27 83 31 83 43C79 35 74 32.5 70 32.5C66 32.5 61 35 57 43Z" fill="#fffdf6"/>
-    <path d="M58.5 41C61 36.5 65.5 34.5 70 34.5C74.5 34.5 79 36.5 81.5 41" fill="none" stroke="#8a5e40" stroke-width="1" stroke-linecap="round" opacity=".55"/>
-    <path d="M70 50Q69 54 71 54.6" fill="none" stroke="#dbb394" stroke-width=".9" stroke-linecap="round"/>
-    <circle cx="62" cy="55.5" r="3" fill="#f4b3a8" opacity=".25"/><circle cx="78" cy="55.5" r="3" fill="#f4b3a8" opacity=".25"/>
-    <path d="M61.5 42.4Q65 40.4 68 42M72 42Q75 40.4 78.5 42.4" fill="none" stroke="#9a6e50" stroke-width=".85" stroke-linecap="round" class="m-sobrancelha"/>
-    <g class="m-olhos-fechados" fill="none" stroke="#5a3b2a" stroke-width="1.15" stroke-linecap="round"><path d="M61.5 47Q65 49.6 68.5 47"/><path d="M71.5 47Q75 49.6 78.5 47"/><path d="M61 47.2l-1.3-.9M79 47.2l1.3-.9" stroke-width=".9"/></g>
-    <g class="m-olhos-abertos"><ellipse cx="65" cy="47" rx="2.7" ry="2.9" fill="#fff"/><ellipse cx="75" cy="47" rx="2.7" ry="2.9" fill="#fff"/><circle cx="65.1" cy="47.3" r="1.9" fill="#5a3b2a"/><circle cx="75.1" cy="47.3" r="1.9" fill="#5a3b2a"/><circle cx="65.7" cy="46.6" r=".65" fill="#fff"/><circle cx="75.7" cy="46.6" r=".65" fill="#fff"/><path d="M62 45.2Q65 43.6 68 45.2M72 45.2Q75 43.6 78 45.2" fill="none" stroke="#5a3b2a" stroke-width=".9" stroke-linecap="round"/></g>
-    <path class="m-boca-serena" d="M67 59.6Q70 61 73 59.6" fill="none" stroke="#c2776c" stroke-width="1.2" stroke-linecap="round"/>
-    <path class="m-boca-sorriso" d="M65.5 58.6Q70 63.6 74.5 58.6" fill="none" stroke="#c2776c" stroke-width="1.3" stroke-linecap="round"/>
-    <g class="m-reza">
-      <path d="M50 74C46 84 49 96 58 102L62 98C57 92 55 84 56 76Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
-      <path d="M90 74C94 84 91 96 82 102L78 98C83 92 85 84 84 76Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
-      <path d="M70 76C65 79 64 90 66 102L70 106L74 102C76 90 75 79 70 76Z" fill="#f4d5b8" stroke="#d2a888" stroke-width="1"/>
-      <path d="M70 80V104" stroke="#d2a888" stroke-width="1" stroke-linecap="round"/>
-      <path d="M62 98L78 98L76 106L64 106Z" fill="url(#m-veste)" stroke="#cfc8b4" stroke-width="1"/>
-    </g>
-    <g class="m-ok">
-      <path d="M52 80C50 92 56 102 66 104" fill="none" stroke="#cfc8b4" stroke-width="13" stroke-linecap="round"/>
-      <path d="M52 80C50 92 56 102 66 104" fill="none" stroke="url(#m-veste)" stroke-width="11" stroke-linecap="round"/>
-      <circle cx="68" cy="104" r="5" fill="#f4d5b8" stroke="#d2a888" stroke-width="1"/>
-      <path d="M92 90C100 86 104 80 105 72" fill="none" stroke="#cfc8b4" stroke-width="15" stroke-linecap="round"/>
-      <path d="M92 90C100 86 104 80 105 72" fill="none" stroke="url(#m-veste)" stroke-width="13" stroke-linecap="round"/>
-      <g transform="translate(106 62)">
-        <g fill="#f4d5b8" stroke="#d2a888" stroke-width="1"><rect x="-1.6" y="-20" width="5.4" height="15" rx="2.7" transform="rotate(-8)"/><rect x="3.6" y="-18" width="5.2" height="14" rx="2.6" transform="rotate(8)"/><rect x="8" y="-13" width="5" height="12" rx="2.5" transform="rotate(24)"/><ellipse cx="2" cy="2" rx="8.5" ry="8"/></g>
-        <circle cx="-1.5" cy="-2" r="5" fill="#fffaf2" stroke="#d2a888" stroke-width="1"/>
-        <path d="M-6.5 -1C-8 -6 -3 -9 .5 -6M-4.5 6C-9 5 -9.5 -1 -6.5 -1" fill="none" stroke="#f4d5b8" stroke-width="3.4" stroke-linecap="round"/>
-        <circle cx="-1.5" cy="-2" r="5" fill="none" stroke="#d2a888" stroke-width="1"/>
-      </g>
-      <g class="m-brilhos" fill="url(#m-ouro)"><path d="M124 42l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M20 70l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><path d="M118 96l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z"/></g>
-    </g>
-  </g>
-  <g class="m-aura"><ellipse cx="70" cy="11" rx="28" ry="7.5" fill="none" stroke="url(#m-ouro)" stroke-width="3.6"/></g>
-</svg>`;
 
 export function pararAfinador() {
   if (!sessao) return;
@@ -96,7 +43,7 @@ export function telaAfinador(tela) {
       <label class="campo" style="margin:4px 0 0"><span>Precisão</span><select id="precisao">
         ${Object.entries(PRECISOES).map(([k, p]) => `<option value="${k}" ${cfg.precisao === k ? 'selected' : ''}>${p.nome}</option>`).join('')}</select></label>
       <label class="pequeno" style="display:flex;gap:8px;align-items:center;margin:6px 0 0"><input type="checkbox" id="ruido" ${cfg.filtroRuido ? 'checked' : ''}> Filtro de ruído <span class="suave">(só aceita notas perto das cordas: ignora voz, conversa e ventilador)</span></label>
-      <div class="maria" aria-hidden="true">${MARIA}</div>
+      <div class="maria" aria-hidden="true">${MARIA_HTML}</div>
       <div class="af-nota"><span id="nota">—</span><small id="oitava"></small></div>
       <div class="af-sub" id="sub">Toque uma corda solta perto do aparelho.</div>
       <div class="af-escala" aria-hidden="true">
@@ -182,6 +129,7 @@ export function telaAfinador(tela) {
       else sessao.travado = false;
     }
     $('#nota').textContent = nome; $('#oitava').textContent = oitava;
+    tela.querySelector('.maria').style.setProperty('--giro', giroDeCents(!completo && !cedo ? 0 : cents).toFixed(1));
     const qual = `${nomePt(nome)}${corda ? ` · ${corda.corda}ª corda` : ''}`;
     if (!completo) {
       // ainda não definido (o ataque da palhetada não acomodou): fica em cinza, com "~" no valor, e só diz para que lado
@@ -212,7 +160,7 @@ export function telaAfinador(tela) {
     const r = leitor.processar(buf, ctx.sampleRate, performance.now());
     // nível em escala de decibéis (−60 a −10 dBFS): som baixo também aparece na barra
     $('#nivel').style.width = Math.max(0, Math.min(100, (20 * Math.log10(r.rms + 1e-9) + 60) * 2)) + '%';
-    if (r.tipo === 'silencio') { tela.querySelector('.afinador').dataset.estado = ''; $('#estab').textContent = 'aguardando som'; return; }
+    if (r.tipo === 'silencio') { tela.querySelector('.afinador').dataset.estado = ''; tela.querySelector('.maria').style.setProperty('--giro', '0'); $('#estab').textContent = 'aguardando som'; return; }
     if (r.tipo === 'mantida') { $('#estab').textContent = r.definida ? 'valor definido (som sumindo)' : 'som fraco: aproxime do violão'; return; }
     if (r.tipo === 'medindo') {
       // toque forte no meio do ajuste: o leitor remede ~150-250 ms; nesse intervalo mantém o último valor ao vivo na tela
