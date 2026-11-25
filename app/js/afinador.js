@@ -6,6 +6,31 @@ import { criarLeitor, aceitarCordas, aceitarCorda, direcaoCedo, notaDe, cordaDe,
 
 let sessao = null;
 
+// Maria rezando: mãos postas e olhos fechados enquanto afina; ao passar pelo verde (afinado) abre os olhos, sorri e faz "ok"
+const MARIA = `<svg viewBox="0 0 120 140" width="112" height="131" role="img" aria-label="Maria rezando">
+  <g class="m-aura"><ellipse cx="60" cy="19" rx="31" ry="8" fill="none" stroke="#e8b730" stroke-width="3.5"/></g>
+  <g class="m-corpo">
+    <path d="M60 22C31 22 23 52 21 82L16 138H104L99 82C97 52 89 22 60 22Z" fill="#2f6db5"/>
+    <path d="M60 22C31 22 23 52 21 82L16 138H40L38 90C38 56 46 30 60 22Z" fill="#245a98"/>
+    <path d="M60 30C42 30 38 52 38 70L40 138H80L82 70C82 52 78 30 60 30Z" fill="#f7f4ec"/>
+    <ellipse cx="60" cy="52" rx="16" ry="19" fill="#f2d2b4"/>
+    <path d="M43 50C43 32 52 28 60 28C68 28 77 32 77 50C72 41 66 38 60 38C54 38 48 41 43 50Z" fill="#f7f4ec" stroke="#d9d3c4" stroke-width="1"/>
+    <circle cx="52" cy="58" r="3.2" fill="#f0a8a0" opacity=".45"/><circle cx="68" cy="58" r="3.2" fill="#f0a8a0" opacity=".45"/>
+    <g class="m-olhos-fechados" fill="none" stroke="#5a3b2a" stroke-width="1.8" stroke-linecap="round"><path d="M50 52Q54 55 58 52"/><path d="M62 52Q66 55 70 52"/></g>
+    <g class="m-olhos-abertos"><ellipse cx="54" cy="52" rx="2.3" ry="2.8" fill="#4a2f22"/><ellipse cx="66" cy="52" rx="2.3" ry="2.8" fill="#4a2f22"/><circle cx="54.8" cy="51" r=".8" fill="#fff"/><circle cx="66.8" cy="51" r=".8" fill="#fff"/></g>
+    <path class="m-boca-serena" d="M55 63Q60 65 65 63" fill="none" stroke="#a5564a" stroke-width="1.8" stroke-linecap="round"/>
+    <path class="m-boca-sorriso" d="M52 61Q60 71 68 61Q60 65 52 61Z" fill="#fff" stroke="#a5564a" stroke-width="1.8" stroke-linejoin="round"/>
+    <g class="m-reza"><path d="M60 80C54 80 53 92 55 106L60 110L65 106C67 92 66 80 60 80Z" fill="#f2d2b4" stroke="#d6b090" stroke-width="1"/><path d="M60 82V108" stroke="#d6b090" stroke-width="1"/></g>
+    <g class="m-ok">
+      <path d="M44 100C50 96 56 98 60 102" fill="none" stroke="#f2d2b4" stroke-width="9" stroke-linecap="round"/>
+      <path d="M84 120C86 108 84 98 80 92" fill="none" stroke="#245a98" stroke-width="12" stroke-linecap="round"/>
+      <g transform="translate(82 82)"><circle r="7.5" fill="none" stroke="#f2d2b4" stroke-width="4.2"/><circle r="7.5" fill="none" stroke="#d6b090" stroke-width=".8"/>
+        <g fill="#f2d2b4" stroke="#d6b090" stroke-width=".8"><rect x="-1" y="-24" width="5" height="17" rx="2.5" transform="rotate(-4)"/><rect x="4" y="-22" width="5" height="16" rx="2.5" transform="rotate(10)"/><rect x="8" y="-17" width="5" height="14" rx="2.5" transform="rotate(24)"/></g></g>
+      <g class="m-brilhos" fill="#e8b730"><path d="M100 60l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M16 66l1.5 3.5 3.5 1.5-3.5 1.5-1.5 3.5-1.5-3.5-3.5-1.5 3.5-1.5z"/></g>
+    </g>
+  </g>
+</svg>`;
+
 export function pararAfinador() {
   if (!sessao) return;
   clearInterval(sessao.quadro);
@@ -41,6 +66,7 @@ export function telaAfinador(tela) {
       <label class="campo" style="margin:4px 0 0"><span>Precisão</span><select id="precisao">
         ${Object.entries(PRECISOES).map(([k, p]) => `<option value="${k}" ${cfg.precisao === k ? 'selected' : ''}>${p.nome}</option>`).join('')}</select></label>
       <label class="pequeno" style="display:flex;gap:8px;align-items:center;margin:6px 0 0"><input type="checkbox" id="ruido" ${cfg.filtroRuido ? 'checked' : ''}> Filtro de ruído <span class="suave">(só aceita notas perto das cordas: ignora voz, conversa e ventilador)</span></label>
+      <div class="maria" aria-hidden="true">${MARIA}</div>
       <div class="af-nota"><span id="nota">—</span><small id="oitava"></small></div>
       <div class="af-sub" id="sub">Toque uma corda solta perto do aparelho.</div>
       <div class="af-escala" aria-hidden="true">

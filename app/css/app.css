@@ -599,3 +599,24 @@ body.modo-tocar::after { animation-play-state: paused; }
 /* afinador ainda medindo (valor não definido): cinza, sem cor de afinado/grave/agudo */
 .afinador[data-estado="medindo"] .af-nota, .afinador[data-estado="medindo"] .af-cents { color: var(--suave); }
 .afinador[data-estado="medindo"] .af-ponteiro { background: var(--suave); }
+
+/* Maria rezando no afinador: reza enquanto afina; afinado (verde) → abre os olhos, sorri e faz "ok" */
+.maria { display: flex; justify-content: center; margin: 6px 0 0; }
+.maria svg { overflow: visible; }
+.maria .m-olhos-abertos, .maria .m-boca-sorriso, .maria .m-ok { display: none; }
+.maria .m-corpo { animation: m-respira 4s ease-in-out infinite; transform-origin: 60px 138px; }
+.maria .m-aura { opacity: .75; animation: m-aura 4s ease-in-out infinite; }
+.afinador[data-estado="perfeito"] .maria .m-reza, .afinador[data-estado="ok"] .maria .m-reza,
+.afinador[data-estado="perfeito"] .maria .m-olhos-fechados, .afinador[data-estado="ok"] .maria .m-olhos-fechados,
+.afinador[data-estado="perfeito"] .maria .m-boca-serena, .afinador[data-estado="ok"] .maria .m-boca-serena { display: none; }
+.afinador[data-estado="perfeito"] .maria .m-olhos-abertos, .afinador[data-estado="ok"] .maria .m-olhos-abertos,
+.afinador[data-estado="perfeito"] .maria .m-boca-sorriso, .afinador[data-estado="ok"] .maria .m-boca-sorriso,
+.afinador[data-estado="perfeito"] .maria .m-ok, .afinador[data-estado="ok"] .maria .m-ok { display: inline; }
+.afinador[data-estado="perfeito"] .maria .m-ok, .afinador[data-estado="ok"] .maria .m-ok { animation: m-pop .45s cubic-bezier(.3, 1.5, .5, 1); transform-origin: 82px 100px; }
+.afinador[data-estado="perfeito"] .maria .m-aura, .afinador[data-estado="ok"] .maria .m-aura { opacity: 1; filter: drop-shadow(0 0 6px #f3c94a); animation: none; }
+.maria .m-brilhos { animation: m-brilha 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes m-respira { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1.2px) scale(1.012); } }
+@keyframes m-aura { 0%, 100% { opacity: .6; } 50% { opacity: .95; } }
+@keyframes m-pop { 0% { transform: scale(.2) rotate(-25deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes m-brilha { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .maria *, .maria { animation: none !important; } }
