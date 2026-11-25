@@ -22,7 +22,7 @@ function escala() {
 
 export const MARIA_HTML = `<div class="maria-quadro">
   <svg class="m-escala" viewBox="0 0 600 480" role="img" aria-label="Escala: as mãos de Maria apontam, com um feixe de luz, quanto falta para afinar">
-    <defs><linearGradient id="m-grad-feixe" gradientUnits="userSpaceOnUse" x1="300" y1="264" x2="300" y2="43"><stop offset="0" stop-color="#f4d36b" stop-opacity="0"/><stop offset=".45" stop-color="#f4d36b" stop-opacity=".5"/><stop offset="1" stop-color="#f1b928" stop-opacity=".95"/></linearGradient><linearGradient id="m-grad-verde" gradientUnits="userSpaceOnUse" x1="300" y1="264" x2="300" y2="43"><stop offset="0" stop-color="#4caf50" stop-opacity="0"/><stop offset=".45" stop-color="#4caf50" stop-opacity=".55"/><stop offset="1" stop-color="#43c05a" stop-opacity=".98"/></linearGradient></defs>
+    <defs><linearGradient id="m-grad-feixe" gradientUnits="userSpaceOnUse" x1="300" y1="264" x2="300" y2="43"><stop offset="0" stop-color="#f4d36b" stop-opacity=".45"/><stop offset=".45" stop-color="#f4d36b" stop-opacity=".65"/><stop offset="1" stop-color="#f1b928" stop-opacity=".95"/></linearGradient><linearGradient id="m-grad-verde" gradientUnits="userSpaceOnUse" x1="300" y1="264" x2="300" y2="43"><stop offset="0" stop-color="#4caf50" stop-opacity=".45"/><stop offset=".45" stop-color="#4caf50" stop-opacity=".65"/><stop offset="1" stop-color="#43c05a" stop-opacity=".98"/></linearGradient></defs>
     ${escala()}
     <g class="m-agulha"><line class="m-feixe" x1="${PX}" y1="${PY - PONTA}" x2="${PX}" y2="${PY - R0 + 14}" stroke="url(#m-grad-feixe)" stroke-width="5" stroke-linecap="round"/>
       <polygon class="m-marca" points="${PX - 12},${PY - R0 + 28} ${PX + 12},${PY - R0 + 28} ${PX},${PY - R0 + 6}" stroke-linejoin="round"/></g>
