@@ -215,7 +215,7 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
   const est = criarEstabilizador(nEstab);
   const estV = criarEstabilizador(2);          // leitura rápida para a seta (igual em todas as precisões)
   const s = { f: null, visto: -1e9, ataque: 0, pico: 0, rmsAnt: 0, suave: null, piso: null, definida: false, fixo: null, hv: [] };
-  const limpar = () => { est.limpar(); estV.limpar(); s.suaveV = null; s.hv = []; s.ultV = null; s.f = null; s.suave = null; s.pico = 0; s.definida = false; s.fixo = null; s.cn = 0; };
+  const limpar = () => { est.limpar(); estV.limpar(); s.suaveV = null; s.hv = []; s.foraDesde = null; s.ultV = null; s.f = null; s.suave = null; s.pico = 0; s.definida = false; s.fixo = null; s.cn = 0; };
   // valor mostrado: depois de definido, o valor fixo (não oscila com o ruído nem com a nota sumindo)
   const valor = () => Math.pow(2, s.definida ? s.fixo : s.suave);
   // COEFICIENTE DE AVANÇO (lead, em segundos): a leitura ao vivo chega ~lead s atrasada (janela de 85 ms + suavização). Com a
@@ -262,7 +262,7 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       const nova = !s.f || agora - s.visto > 300 || repalhetada || salto;
       if (!nova && Math.abs(centsEntre(r.freq, s.f)) > 40) return s.suave != null ? { tipo: 'mantida', rms, f: valor(), definida: s.definida } : { tipo: 'silencio', rms };
       s.rmsAnt = rms;
-      if (nova) { est.limpar(); estV.limpar(); s.suaveV = null; s.hv = []; s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; s.definida = false; s.fixo = null; s.cn = 0; }
+      if (nova) { est.limpar(); estV.limpar(); s.suaveV = null; s.hv = []; s.foraDesde = null; s.ataque = agora; s.pico = 0; s.suave = null; s.cedoN = 0; s.fAnt = null; s.definida = false; s.fixo = null; s.cn = 0; }
       s.pico = Math.max(s.pico, rms);
       // janela que cresce desde a palhetada: ~0,13 s (resposta rápida) até 0,34 s (precisão), sem o som de antes
       const desde = Math.round((agora - s.ataque) / 1000 * taxa);
@@ -330,7 +330,11 @@ export function criarLeitor({ rmsMin = 0.0006, clarezaMin = 0.85, manter = 0.05,
       if (s.definida) {
         const dev = 1200 * ((s.suaveV ?? s.suave) - s.fixo);
         s.un = movendo && Math.abs(dev) > destravar && Math.sign(dev) === Math.sign(mov) && rms >= 0.3 * s.pico ? (s.un || 0) + 1 : 0;
-        if (s.un >= 2) { s.definida = false; s.un = 0; s.cn = 0; }
+        // ...ou, em qualquer velocidade: a leitura precisa fica longe do valor definido, sempre para o mesmo lado, por 350 ms (120 ms se o desvio já é grande)
+        const longe = 1200 * (s.suave - s.fixo), foraFixo = Math.abs(longe) > Math.max(1.5 * destravar, 2 * v.desvioCents) && rms >= 0.1 * s.pico && rms >= 2 * limiar && agora - (s.golpeT ?? -1e9) >= 300;
+        if (!foraFixo || Math.sign(longe) !== s.ladoFora) { s.foraDesde = foraFixo ? agora : null; s.ladoFora = foraFixo ? Math.sign(longe) : 0; }
+        if (s.foraDesde != null && agora - s.foraDesde >= (Math.abs(longe) > 2.5 * destravar ? 120 : 350)) s.un = 2;
+        if (s.un >= 2) { s.foraDesde = null; s.definida = false; s.un = 0; s.cn = 0; }
       } else s.un = 0;
       s.cn = concorda ? (s.cn || 0) + 1 : 0;                  // precisa concordar em quadros seguidos para definir
       // corda grave (< 130 Hz) com som fraco: o rumor pesa mais, então confirma por mais 3 quadros antes de definir
