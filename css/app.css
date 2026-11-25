@@ -607,15 +607,18 @@ body.modo-tocar::after { animation-play-state: paused; }
 .maria .m-figura { position: absolute; left: 13%; top: 5.625%; width: 74%; aspect-ratio: 1; z-index: 1; }
 .maria .m-img { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; pointer-events: none; transition: opacity .3s ease; -webkit-mask-image: linear-gradient(#000 86%, transparent 99%); mask-image: linear-gradient(#000 86%, transparent 99%); }
 .maria .m-afinada { opacity: 0; }
-.maria .m-maos { position: absolute; width: 18.4%; left: 40.8%; top: 53.3%; transform-origin: 50% 81.8%; transform: rotate(calc(var(--giro) * 1deg)); transition: transform .14s linear, opacity .3s ease; pointer-events: none; user-select: none; }
+.maria .m-maos { position: absolute; aspect-ratio: 982 / 1468; width: 18.4%; left: 40.8%; top: 53.3%; transform-origin: 50% 81.8%; transform: rotate(calc(var(--giro) * 1deg)); transition: transform .14s linear, opacity .3s ease; pointer-events: none; user-select: none; }
+.maria .m-mao { position: absolute; inset: 0; width: 100%; height: 100%; transition: transform .4s cubic-bezier(.3, 1.3, .5, 1); }
+.maria .m-mao-e { transform-origin: 27.4% 82%; } .maria .m-mao-d { transform-origin: 72.6% 82%; }
+.afinador[data-estado="perfeito"] .maria .m-mao-e, .afinador[data-estado="ok"] .maria .m-mao-e { transform: rotate(-30deg); }
+.afinador[data-estado="perfeito"] .maria .m-mao-d, .afinador[data-estado="ok"] .maria .m-mao-d { transform: rotate(30deg); }
 .maria .m-agulha { transform-origin: 300px 364px; transform: rotate(calc(var(--giro) * 1deg)); transition: transform .14s linear; }
 .maria .m-t-v { stroke: #4caf50; } .maria .m-t-a { stroke: #e9a23b; } .maria .m-t-r { stroke: #d9534f; }
 .maria .m-marca { fill: #e0a82a; transition: fill .3s; }
 .maria .m-bemol, .maria .m-sustenido { fill: #b4776a; font-family: Georgia, serif; }
 .maria .m-brilho { position: absolute; inset: 6% 4% 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(76, 175, 80, .38), rgba(76, 175, 80, 0)); opacity: 0; transition: opacity .35s ease; }
 .afinador[data-estado="medindo"] .maria .m-maos { opacity: .75; }
-.afinador[data-estado="perfeito"] .maria .m-rezando, .afinador[data-estado="ok"] .maria .m-rezando,
-.afinador[data-estado="perfeito"] .maria .m-maos, .afinador[data-estado="ok"] .maria .m-maos { opacity: 0; }
+.afinador[data-estado="perfeito"] .maria .m-rezando, .afinador[data-estado="ok"] .maria .m-rezando { opacity: 0; }
 .afinador[data-estado="perfeito"] .maria .m-afinada, .afinador[data-estado="ok"] .maria .m-afinada,
 .afinador[data-estado="perfeito"] .maria .m-brilho, .afinador[data-estado="ok"] .maria .m-brilho { opacity: 1; }
 .afinador[data-estado="perfeito"] .maria .m-feixe, .afinador[data-estado="ok"] .maria .m-feixe { stroke: url(#m-grad-verde); filter: drop-shadow(0 0 4px #4caf50); }

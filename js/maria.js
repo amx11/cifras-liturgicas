@@ -1,7 +1,7 @@
 // Maria como medidor do afinador (ilustração: assets/maria-*.webp). As mãos postas são uma camada separada que gira como
 // ponteiro em torno dos pulsos e de suas pontas sai um feixe de luz, que gira junto, até um arco grande em volta dela
-// (♭ à esquerda, ♯ à direita). Fora do tom ela reza (olhos fechados); ao afinar (verde) a imagem troca por Maria sorrindo, de
-// olhos abertos e mãos abertas, e o arco acende. O ângulo vem da variável CSS --giro (graus), posta por afinador.js;
+// (♭ à esquerda, ♯ à direita). Fora do tom ela reza (olhos fechados); ao afinar (verde) ela abre os olhos e sorri, as MESMAS mãos se abrem
+// (duas metades que se afastam) e o arco acende. O ângulo vem da variável CSS --giro (graus), posta por afinador.js;
 // o estado vem de data-estado.
 const GRAU_POR_CENT = 0.9;                                  // ±50 cents = ±45°
 export const giroDeCents = c => Math.max(-50, Math.min(50, c)) * GRAU_POR_CENT;
@@ -31,6 +31,6 @@ export const MARIA_HTML = `<div class="maria-quadro">
     <div class="m-brilho"></div>
     <img class="m-img m-rezando" src="assets/maria-rezando.webp" alt="" draggable="false">
     <img class="m-img m-afinada" src="assets/maria-afinada.webp" alt="" draggable="false">
-    <img class="m-maos" src="assets/maria-maos.webp" alt="" draggable="false">
+    <div class="m-maos"><img class="m-mao m-mao-e" src="assets/maria-mao-esq.webp" alt="" draggable="false"><img class="m-mao m-mao-d" src="assets/maria-mao-dir.webp" alt="" draggable="false"></div>
   </div>
 </div>`;
